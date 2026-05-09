@@ -5,6 +5,7 @@ const scoreElement = document.getElementById('score');
 let score = 0;
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
+let time = 0;
 
 const turret = {
     x: canvas.width / 2,
@@ -17,6 +18,11 @@ let ships = [];
 
 const horizonY = canvas.height / 2; // Horizon in the middle of view
 
+const viewLeft = canvas.width / 2 - 200;
+const viewRight = canvas.width / 2 + 200;
+const viewTop = canvas.height / 2 - 200;
+const viewBottom = canvas.height / 2 + 200;
+
 class Projectile {
     constructor(x, y, angle) {
         this.x = x;
@@ -27,14 +33,33 @@ class Projectile {
         this.width = 20;
         this.height = 5;
         this.radius = this.width / 2; // For collision
+        this.trail = [];
     }
 
     update() {
         this.x += this.vx;
         this.y += this.vy;
+        this.trail.push({x: this.x, y: this.y});
+        if (this.trail.length > 10) {
+            this.trail.shift();
+        }
     }
 
     draw() {
+        // Draw trail as a fading line
+        if (this.trail.length > 1) {
+            const gradient = ctx.createLinearGradient(this.trail[0].x, this.trail[0].y, this.x, this.y);
+            gradient.addColorStop(0, 'rgba(90, 155, 212, 0)'); // Transparent at start
+            gradient.addColorStop(1, 'rgba(90, 155, 212, 0.5)'); // Semi-transparent at end
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(this.trail[0].x, this.trail[0].y);
+            ctx.lineTo(this.x, this.y);
+            ctx.stroke();
+        }
+
+        // Draw projectile
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
@@ -46,7 +71,7 @@ class Projectile {
     }
 
     isOffScreen() {
-        return this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50;
+        return this.x < viewLeft || this.x > viewRight || this.y < viewTop || this.y > viewBottom || this.y <= horizonY;
     }
 }
 
@@ -65,7 +90,7 @@ class Ship {
     }
 
     draw() {
-        ctx.fillStyle = '#333333';
+        ctx.fillStyle = '#1a1a1a'; // Almost black
         // Hull
         ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
         // Superstructure
@@ -117,6 +142,7 @@ function checkCollisions() {
 
 function update() {
     updateTurretAngle();
+    time += 0.05; // For wave animation
 
     projectiles.forEach(proj => proj.update());
     projectiles = projectiles.filter(proj => !proj.isOffScreen());
@@ -141,23 +167,55 @@ function draw() {
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, canvas.width, horizonY);
 
-    // Draw horizon
+    // Draw horizon with stronger bumps and fill the water beneath it
     ctx.strokeStyle = 'black';
     ctx.lineWidth = 1;
+    const horizonOffset = Math.sin(time * 0.8) * 2.4;
     ctx.beginPath();
-    ctx.moveTo(0, horizonY);
-    ctx.lineTo(canvas.width, horizonY);
+    ctx.moveTo(0, horizonY + horizonOffset);
+    for (let x = 10; x <= canvas.width; x += 10) {
+        const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.closePath();
+    ctx.fillStyle = '#003060';
+    ctx.fill();
+
+    // Add a few large curved darker patches across the ocean
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.16)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 5; i++) {
+        const baseY = horizonY + 80 + i * 32;
+        const startX = 60 + i * 110;
+        const endX = startX + 170;
+        const controlX = startX + 90;
+        const controlY = baseY + Math.sin(time * 0.45 + i) * 12 + 8;
+        ctx.beginPath();
+        ctx.moveTo(startX, baseY);
+        ctx.quadraticCurveTo(controlX, controlY, endX, baseY);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    // Draw the horizon outline over the filled water
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY + horizonOffset);
+    for (let x = 10; x <= canvas.width; x += 10) {
+        const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+        ctx.lineTo(x, y);
+    }
     ctx.stroke();
 
-    // Draw water
-    ctx.fillStyle = '#4682B4'; // Steel blue
-    ctx.fillRect(0, horizonY, canvas.width, canvas.height - horizonY);
-
-    // Draw ships and projectiles
+    // Draw ships
     ships.forEach(ship => ship.draw());
-    projectiles.forEach(proj => proj.draw());
 
     ctx.restore();
+
+    // Draw projectiles (not clipped, so they wrap around the bottom area)
+    projectiles.forEach(proj => proj.draw());
 
     // Draw crosshair
     ctx.strokeStyle = 'white';
