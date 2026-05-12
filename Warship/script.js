@@ -2,16 +2,68 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const scoreElement = document.getElementById('score');
 
+let audioCtx;
+function initAudio() {
+    try {
+        if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    } catch (e) {
+        console.error("Audio init error:", e);
+    }
+}
+
+// Initialize audio on any click or key press anywhere on the window
+window.addEventListener('click', initAudio, { once: true });
+window.addEventListener('keydown', initAudio, { once: true });
+
+function playSonarPing(type = 'ship') {
+    try {
+        if (!audioCtx) return;
+        if (audioCtx.state === 'suspended') return;
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        // Create a sharp "click" sound using a rapid frequency sweep and fast decay
+        oscillator.type = 'sine';
+        const startFreq = type === 'ship' ? 2000 : 3000;
+        oscillator.frequency.setValueAtTime(startFreq, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.03);
+        
+        const now = audioCtx.currentTime;
+        
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(1.0, now + 0.002); // Instant attack
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.03); // Very fast decay
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start(now);
+        oscillator.stop(now + 0.04);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
 let score = 0;
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
 let time = 0;
 let weaponType = 'single';
 let tripleAmmo = 40;
+let isMenuOpen = false;
+let gameStarted = false;
+let nightVisionEnabled = false;
 
 const turret = {
     x: canvas.width / 2,
-    y: canvas.height / 2 + 200, // At the bottom of the view
+    y: canvas.height / 2 + 300, // At the bottom of the periscope view
     angle: 0
 };
 
@@ -22,10 +74,10 @@ let crates = [];
 
 const horizonY = canvas.height / 2; // Horizon in the middle of view
 
-const viewLeft = canvas.width / 2 - 200;
-const viewRight = canvas.width / 2 + 200;
-const viewTop = canvas.height / 2 - 200;
-const viewBottom = canvas.height / 2 + 200;
+const viewLeft = canvas.width / 2 - 300;
+const viewRight = canvas.width / 2 + 300;
+const viewTop = canvas.height / 2 - 300;
+const viewBottom = canvas.height / 2 + 300;
 
 class Projectile {
     constructor(x, y, angle, speed = 10) {
@@ -234,8 +286,8 @@ function spawnShip() {
 }
 
 function spawnCrate() {
-    // Limit to 1 active crate at a time and lower spawn rate to spread them out
-    if (crates.length < 1 && Math.random() < 0.0015) { 
+    // Limit to 2 active crates at a time and higher spawn rate
+    if (crates.length < 2 && Math.random() < 0.005) { 
         crates.push(new Crate());
     }
 }
@@ -305,10 +357,10 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Clip to the barrel view (larger center rectangle)
+    // Clip to the periscope view (circular)
     ctx.save();
     ctx.beginPath();
-    ctx.rect(canvas.width / 2 - 200, canvas.height / 2 - 200, 400, 400);
+    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.clip();
 
     // Draw sky with gradient
@@ -345,16 +397,17 @@ function draw() {
     ctx.fillStyle = waterGradient;
     ctx.fill();
 
-    // Add a few large curved darker patches across the ocean
+    // Add a few large curved darker patches across the ocean (with perspective)
     ctx.save();
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.16)';
-    ctx.lineWidth = 1.5;
     for (let i = 0; i < 5; i++) {
-        const baseY = horizonY + 80 + i * 32;
+        const depthFactor = i * 20 + (i * i) * 8; // Perspective scaling
+        const baseY = horizonY + 30 + depthFactor;
         const startX = 60 + i * 110;
-        const endX = startX + 170;
-        const controlX = startX + 90;
-        const controlY = baseY + Math.sin(time * 0.45 + i) * 12 + 8;
+        const endX = startX + 170 + i * 50; // Get wider as they get closer
+        const controlX = startX + (endX - startX) / 2;
+        const controlY = baseY + Math.sin(time * 0.45 + i) * (12 + i * 3) + 8;
+        ctx.lineWidth = 1.5 + i * 0.5;
         ctx.beginPath();
         ctx.moveTo(startX, baseY);
         ctx.quadraticCurveTo(controlX, controlY, endX, baseY);
@@ -362,20 +415,25 @@ function draw() {
     }
     ctx.restore();
 
-    // Draw animated waves (whitecaps) on the water
+    // Draw animated waves (whitecaps) on the water (with perspective)
     ctx.save();
-    ctx.strokeStyle = 'rgba(28, 77, 124, 0.6)';
-    ctx.lineWidth = 1.5;
-    for (let i = 1; i <= 7; i++) {
-        const waveBaseY = horizonY + i * 28;
+    for (let i = 1; i <= 9; i++) {
+        const depthFactor = i * 15 + (i * i) * 3.5;
+        const waveBaseY = horizonY + depthFactor;
+        
+        if (waveBaseY > canvas.height / 2 + 300) break; // Don't draw past periscope view
+
         ctx.beginPath();
+        ctx.lineWidth = 1 + i * 0.4;
+        ctx.strokeStyle = `rgba(28, 77, 124, ${0.4 + i * 0.05})`;
         
         // Use dashes to make them look like individual wave crests
-        ctx.setLineDash([80 + i * 5, 60 + i * 5]);
-        ctx.lineDashOffset = -(time * 15 + i * 25); // Move them left over time
+        ctx.setLineDash([80 + i * 15, 60 + i * 10]);
+        ctx.lineDashOffset = -(time * (10 + i * 2) + i * 25); // Move them left over time
         
         for (let x = 0; x <= canvas.width; x += 20) {
-            const waveY = waveBaseY + Math.sin((x * 0.04) + time * 1.5 + i) * 3 + Math.cos((x * 0.02) + time * 0.8) * 2;
+            const waveAmplitude = (2 + i * 0.5);
+            const waveY = waveBaseY + Math.sin((x * 0.04) + time * 1.5 + i) * waveAmplitude + Math.cos((x * 0.02) + time * 0.8) * (waveAmplitude * 0.6);
             if (x === 0) {
                 ctx.moveTo(x, waveY);
             } else {
@@ -404,12 +462,231 @@ function draw() {
     // Draw explosions
     explosions.forEach(exp => exp.draw());
 
+    // Apply Night Vision green tint over the periscope
+    if (nightVisionEnabled) {
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     ctx.restore();
 
     // Draw projectiles (not clipped, so they wrap around the bottom area)
     projectiles.forEach(proj => proj.draw());
 
-    // Draw crosshair
+    // Draw periscope mask and HUD overlay
+    ctx.save();
+    // Black out everything outside the periscope circle
+    ctx.fillStyle = 'black';
+    ctx.beginPath();
+    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2, true);
+    ctx.fill();
+
+    // Draw periscope green HUD lines
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.25)';
+    ctx.lineWidth = 1.5;
+    
+    // Crosshairs
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2 - 300, canvas.height / 2);
+    ctx.lineTo(canvas.width / 2 + 300, canvas.height / 2);
+    ctx.moveTo(canvas.width / 2, canvas.height / 2 - 300);
+    ctx.lineTo(canvas.width / 2, canvas.height / 2 + 300);
+    ctx.stroke();
+
+    // Distance rings
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 100, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 200, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Tick marks
+    for(let i = -250; i <= 250; i += 50) {
+        if (i === 0) continue;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - 8, canvas.height / 2 + i);
+        ctx.lineTo(canvas.width / 2 + 8, canvas.height / 2 + i);
+        ctx.moveTo(canvas.width / 2 + i, canvas.height / 2 - 8);
+        ctx.lineTo(canvas.width / 2 + i, canvas.height / 2 + 8);
+        ctx.stroke();
+    }
+    
+    // Thick border edge
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Draw makeshift radar in the bottom-right corner
+    ctx.save();
+    const radarCX = canvas.width - 100;
+    const radarCY = canvas.height - 120;
+    const radarRadius = 75;
+
+    // Radar background
+    ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+    ctx.beginPath();
+    ctx.arc(radarCX, radarCY, radarRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Radar rings and crosshairs
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(radarCX, radarCY, radarRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(radarCX, radarCY, radarRadius * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(radarCX - radarRadius, radarCY);
+    ctx.lineTo(radarCX + radarRadius, radarCY);
+    ctx.moveTo(radarCX, radarCY - radarRadius);
+    ctx.lineTo(radarCX, radarCY + radarRadius);
+    ctx.stroke();
+
+    // Radar sweeper line and trailing wedge
+    const sweepAngle = time * 2;
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(radarCX, radarCY);
+    ctx.arc(radarCX, radarCY, radarRadius, sweepAngle - 0.5, sweepAngle, false);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(radarCX, radarCY);
+    ctx.lineTo(radarCX + Math.cos(sweepAngle) * radarRadius, radarCY + Math.sin(sweepAngle) * radarRadius);
+    ctx.stroke();
+
+    // Draw radar blips
+    const drawBlips = (items, color, type) => {
+        const currentSweep = (time * 2) % (Math.PI * 2);
+        
+        items.forEach(item => {
+            const dx = item.x - turret.x;
+            const dy = item.y - turret.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const scale = radarRadius / 450; // Scale world distance down to radar size
+            if (dist * scale < radarRadius - 3) {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(radarCX + dx * scale, radarCY + dy * scale, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Sonar ping detection logic
+                let targetAngle = Math.atan2(dy, dx);
+                if (targetAngle < 0) targetAngle += Math.PI * 2;
+                
+                let diff = Math.abs(currentSweep - targetAngle);
+                if (diff > Math.PI) diff = Math.PI * 2 - diff; // Handle wrap around
+                
+                if (diff < 0.25 && (!item.lastPingTime || time - item.lastPingTime > 1.5)) {
+                    item.lastPingTime = time;
+                    playSonarPing(type);
+                }
+                
+                // Visual pulse effect when pinged
+                if (item.lastPingTime && time - item.lastPingTime < 0.5) {
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.5;
+                    const pulseRadius = 3 + (time - item.lastPingTime) * 30;
+                    ctx.beginPath();
+                    ctx.arc(radarCX + dx * scale, radarCY + dy * scale, pulseRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+        });
+    };
+
+    drawBlips(ships, '#ff4444', 'ship'); // Red blips for enemy ships
+    drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
+    ctx.restore();
+
+    // Draw San Jose (PT) Time in the top-right corner
+    ctx.save();
+    const sjTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(new Date());
+
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(sjTime + ' PT', canvas.width - 100, 40);
+    ctx.restore();
+
+    // Draw menu overlay if open
+    if (isMenuOpen) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 30px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('MENU', canvas.width / 2, canvas.height / 2 - 50);
+        
+        ctx.font = '18px monospace';
+        ctx.fillText('Game Paused', canvas.width / 2, canvas.height / 2 - 20);
+
+        // Draw Night Vision Button
+        const nvBtnX = canvas.width / 2 - 100;
+        const nvBtnY = canvas.height / 2 + 5;
+        const nvBtnW = 200;
+        const nvBtnH = 35;
+        ctx.fillStyle = nightVisionEnabled ? '#00ff00' : 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, nvBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, nvBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = nightVisionEnabled ? 'black' : '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText(`Night Vision: ${nightVisionEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, nvBtnY + nvBtnH / 2);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '14px monospace';
+        ctx.fillText('Click menu icon to resume', canvas.width / 2, canvas.height / 2 + 70);
+        ctx.restore();
+    }
+
+    // Draw hamburger menu button in the bottom-left corner
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+    ctx.fillRect(20, canvas.height - 70, 160, 45);
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, canvas.height - 70, 160, 45);
+
+    // Draw 3 horizontal lines for the hamburger icon
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(30, canvas.height - 60, 24, 4);
+    ctx.fillRect(30, canvas.height - 49, 24, 4);
+    ctx.fillRect(30, canvas.height - 38, 24, 4);
+
+    // Add WARSHIP text
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('WARSHIP', 65, canvas.height - 47);
+    ctx.restore();
+
+    // Draw small targeting crosshair at mouse
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -421,18 +698,24 @@ function draw() {
 
     // Draw Switch Weapon button
     const btnX = canvas.width / 2 - 70;
-    const btnY = canvas.height / 2 + 260;
+    const btnY = canvas.height - 45; // Anchored to the very bottom edge of the canvas
     const btnWidth = 140;
     const btnHeight = 35;
     
-    ctx.fillStyle = weaponType === 'triple' ? 'rgba(255, 68, 68, 0.8)' : 'rgba(68, 170, 255, 0.8)';
+    if (nightVisionEnabled) {
+        ctx.fillStyle = weaponType === 'triple' ? 'rgba(0, 100, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+    } else {
+        ctx.fillStyle = weaponType === 'triple' ? 'rgba(255, 68, 68, 0.8)' : 'rgba(68, 170, 255, 0.8)';
+        ctx.strokeStyle = 'white';
+    }
+    
     ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
-    ctx.strokeStyle = 'white';
     ctx.lineWidth = 1;
     ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
     
-    ctx.fillStyle = 'white';
-    ctx.font = '16px sans-serif';
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : 'white';
+    ctx.font = nightVisionEnabled ? 'bold 16px monospace' : '16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const btnText = weaponType === 'triple' ? `Triple (${tripleAmmo})` : `Single (∞)`;
@@ -446,12 +729,35 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('click', (e) => {
+    initAudio(); // Initialize audio context on first user interaction
+    if (!gameStarted) {
+        gameStarted = true;
+        return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
+    // Check if the hamburger menu button was clicked to toggle the menu
+    if (cx >= 20 && cx <= 20 + 160 && cy >= canvas.height - 70 && cy <= canvas.height - 70 + 45) {
+        isMenuOpen = !isMenuOpen;
+        return;
+    }
+
+    if (isMenuOpen) {
+        const nvBtnX = canvas.width / 2 - 100;
+        const nvBtnY = canvas.height / 2 + 5;
+        const nvBtnW = 200;
+        const nvBtnH = 35;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= nvBtnY && cy <= nvBtnY + nvBtnH) {
+            nightVisionEnabled = !nightVisionEnabled;
+        }
+        return; // Prevent shooting or switching weapons while menu is open
+    }
+
     const btnX = canvas.width / 2 - 70;
-    const btnY = canvas.height / 2 + 260;
+    const btnY = canvas.height - 45;
     const btnWidth = 140;
     const btnHeight = 35;
 
@@ -465,7 +771,27 @@ canvas.addEventListener('click', (e) => {
 });
 
 function gameLoop() {
-    update();
+    if (!gameStarted) {
+        draw(); // Draw the initial static frame of the game
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 40px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '20px monospace';
+        ctx.fillText('CLICK ANYWHERE TO START', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.restore();
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
+    if (!isMenuOpen) {
+        update();
+    }
     draw();
     requestAnimationFrame(gameLoop);
 }
