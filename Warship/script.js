@@ -1,6 +1,7 @@
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const scoreElement = document.getElementById('score');
+const radarCountElement = document.getElementById('radar-count');
 
 let audioCtx;
 function initAudio() {
@@ -17,9 +18,19 @@ function initAudio() {
     }
 }
 
-// Initialize audio on any click or key press anywhere on the window
-window.addEventListener('click', initAudio, { once: true });
-window.addEventListener('keydown', initAudio, { once: true });
+// Initialize audio and start game on any click or key press anywhere on the window
+window.addEventListener('click', () => {
+    initAudio();
+    if (!gameStarted) {
+        gameStarted = true;
+    }
+});
+window.addEventListener('keydown', () => {
+    initAudio();
+    if (!gameStarted) {
+        gameStarted = true;
+    }
+});
 
 function playSonarPing(type = 'ship') {
     try {
@@ -362,8 +373,8 @@ function checkCollisions() {
                 playExplosionSound();
                 projectiles.splice(i, 1);
                 ships.splice(j, 1);
-                score += 10;
-                scoreElement.textContent = `Score: ${score}`;
+                score += 1;
+                scoreElement.textContent = `Sunken Ships: ${score}`;
                 hit = true;
                 break;
             }
@@ -408,6 +419,8 @@ function update() {
     spawnShip();
     spawnCrate();
     checkCollisions();
+
+    radarCountElement.textContent = `Ships on Radar: ${ships.length}`;
 }
 
 function draw() {
@@ -808,6 +821,17 @@ canvas.addEventListener('click', (e) => {
         const nvBtnH = 35;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= nvBtnY && cy <= nvBtnY + nvBtnH) {
             nightVisionEnabled = !nightVisionEnabled;
+            if (nightVisionEnabled) {
+                scoreElement.style.color = '#00ff00';
+                scoreElement.style.textShadow = '0 0 5px #00ff00';
+                radarCountElement.style.color = '#00ff00';
+                radarCountElement.style.textShadow = '0 0 5px #00ff00';
+            } else {
+                scoreElement.style.color = '#00BFFF';
+                scoreElement.style.textShadow = '0 0 5px #00BFFF';
+                radarCountElement.style.color = '#00BFFF';
+                radarCountElement.style.textShadow = '0 0 5px #00BFFF';
+            }
         }
         return; // Prevent shooting or switching weapons while menu is open
     }
