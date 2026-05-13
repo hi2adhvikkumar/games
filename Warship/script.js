@@ -51,6 +51,60 @@ function playSonarPing(type = 'ship') {
     }
 }
 
+function playExplosionSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 0.15; // Longer duration for a crisp click
+
+        // Layer 1: High-frequency snap (The plastic click)
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(2000, now); // Softer, lower frequency
+        noiseFilter.frequency.exponentialRampToValueAtTime(100, now + duration);
+        
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(0.6, now + 0.002); // Softer attack
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+
+        // Layer 2: Fast pitch drop (The mechanical switch sound)
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine'; // Smoother, softer body
+        osc.frequency.setValueAtTime(2000, now); // Start lower
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.03); // Lightning fast drop
+        
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(0, now);
+        oscGain.gain.linearRampToValueAtTime(0.6, now + 0.002); // Softer attack
+        oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        osc.connect(oscGain);
+        oscGain.connect(audioCtx.destination);
+        
+        osc.start(now);
+        osc.stop(now + duration);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
 let score = 0;
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
@@ -305,6 +359,7 @@ function checkCollisions() {
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance < proj.radius + ship.width / 2) {
                 explosions.push(new Explosion(ship.x, ship.y));
+                playExplosionSound();
                 projectiles.splice(i, 1);
                 ships.splice(j, 1);
                 score += 10;
@@ -324,6 +379,7 @@ function checkCollisions() {
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance < proj.radius + crate.width / 2) {
                 explosions.push(new Explosion(crate.x, crate.y));
+                playExplosionSound();
                 projectiles.splice(i, 1);
                 crates.splice(k, 1);
                 tripleAmmo += (tripleAmmo <= 30) ? 7 : 2; // Replenish ammo when destroyed
