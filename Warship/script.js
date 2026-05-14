@@ -136,6 +136,16 @@ let projectiles = [];
 let ships = [];
 let explosions = [];
 let crates = [];
+let clouds = [];
+
+for (let i = 0; i < 6; i++) {
+    clouds.push({
+        x: Math.random() * 800,
+        y: Math.random() * 200 + 50,
+        speed: Math.random() * 0.2 + 0.05,
+        scale: Math.random() * 0.6 + 0.3
+    });
+}
 
 const horizonY = canvas.height / 2; // Horizon in the middle of view
 
@@ -215,6 +225,19 @@ class Ship {
         const horizonOffset = Math.sin(time * 0.8) * 2.4;
         const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         
+        // Draw foamy water wake trailing behind the ship
+        const wakeLength = 60;
+        const wakeY = this.y + bobOffset - 5; // Centered over the hull and superstructure
+        const gradient = ctx.createLinearGradient(this.x + this.width / 2 + wakeLength, wakeY, this.x, wakeY);
+        gradient.addColorStop(0, 'rgba(90, 155, 212, 0)'); // Transparent at tail
+        gradient.addColorStop(1, 'rgba(90, 155, 212, 0.5)'); // Semi-transparent at ship
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 30; // As tall as the ship bottom below the masts
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.width / 2 + wakeLength, wakeY);
+        ctx.lineTo(this.x, wakeY);
+        ctx.stroke();
+
         ctx.fillStyle = '#1a1a1a'; // Almost black
         // Hull
         ctx.fillRect(this.x - this.width / 2, this.y + bobOffset - this.height / 2, this.width, this.height);
@@ -423,6 +446,11 @@ function update() {
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
 
+    clouds.forEach(cloud => {
+        cloud.x -= cloud.speed;
+        if (cloud.x < -100) cloud.x = canvas.width + 100;
+    });
+
     spawnShip();
     spawnCrate();
     checkCollisions();
@@ -445,6 +473,21 @@ function draw() {
     skyGradient.addColorStop(1, '#87CEEB');
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, canvas.width, horizonY);
+
+    // Draw drifting clouds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    clouds.forEach(cloud => {
+        ctx.save();
+        ctx.translate(cloud.x, cloud.y);
+        ctx.scale(cloud.scale, cloud.scale);
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, 0, Math.PI * 2);
+        ctx.arc(25, -15, 35, 0, Math.PI * 2);
+        ctx.arc(55, 0, 25, 0, Math.PI * 2);
+        ctx.arc(25, 10, 30, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
 
     // Draw sun
     ctx.fillStyle = 'rgba(255, 235, 180, 0.9)';
@@ -472,6 +515,14 @@ function draw() {
     waterGradient.addColorStop(1, '#001122'); // Darker at the bottom
     ctx.fillStyle = waterGradient;
     ctx.fill();
+    
+    // Draw shimmering sun reflection on the water
+    ctx.fillStyle = 'rgba(255, 235, 180, 0.25)';
+    for (let i = 0; i < 20; i++) {
+        const width = 100 - i * 4 + Math.sin(time * 5 + i) * 15;
+        const refY = horizonY + 2 + i * 8 + Math.sin(time * 2 + i * 0.5) * 2;
+        ctx.fillRect(canvas.width * 0.75 - width / 2, refY, width, 3);
+    }
 
     // Add a few large curved darker patches across the ocean (with perspective)
     ctx.save();
@@ -699,6 +750,153 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(sjTime + ' PT', canvas.width - 100, 40);
+    ctx.restore();
+
+    // Draw Rank Badge in the right-middle
+    ctx.save();
+    const badgeX = canvas.width - 70;
+    const badgeY = canvas.height / 2 - 20;
+
+    let rank = "SEAMAN";
+    let badgeColor = "#cd7f32"; // Bronze
+    let pips = 1;
+
+    if (score >= 14) {
+        rank = "ADMIRAL";
+        badgeColor = "#e5e4e2"; // Silver/Platinum
+        pips = 3;
+    } else if (score >= 7) {
+        rank = "CAPTAIN";
+        badgeColor = "#ffd700"; // Gold
+        pips = 2;
+    }
+
+    if (nightVisionEnabled) {
+        badgeColor = '#00ff00'; // Match tactical green HUD
+    }
+
+    // Shadow for 3D pop
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
+    // Leather gradient background
+    const bgGrad = ctx.createLinearGradient(badgeX - 35, badgeY - 35, badgeX + 35, badgeY + 50);
+    if (nightVisionEnabled) {
+        bgGrad.addColorStop(0, 'rgba(0, 50, 0, 1)'); // Brighter top-left for light source
+        bgGrad.addColorStop(1, 'black');
+    } else {
+        bgGrad.addColorStop(0, 'rgba(65, 30, 15, 1)'); // Brighter brown top-left for light source
+        bgGrad.addColorStop(1, 'black');   // Pure black
+    }
+
+    ctx.fillStyle = bgGrad;
+    ctx.strokeStyle = badgeColor;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    
+    // Draw outer shield
+    ctx.beginPath();
+    ctx.moveTo(badgeX, badgeY - 35);
+    ctx.lineTo(badgeX + 35, badgeY - 35);
+    ctx.lineTo(badgeX + 35, badgeY + 15);
+    ctx.lineTo(badgeX, badgeY + 50);
+    ctx.lineTo(badgeX - 35, badgeY + 15);
+    ctx.lineTo(badgeX - 35, badgeY - 35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Turn off shadow for inner details
+    ctx.shadowColor = 'transparent';
+
+    // Top-Left Highlight (Light source)
+    ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(badgeX - 33, badgeY + 14);
+    ctx.lineTo(badgeX - 33, badgeY - 33);
+    ctx.lineTo(badgeX + 33, badgeY - 33);
+    ctx.stroke();
+
+    // Bottom-Right Shadow
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.moveTo(badgeX + 33, badgeY - 33);
+    ctx.lineTo(badgeX + 33, badgeY + 14);
+    ctx.lineTo(badgeX, badgeY + 47);
+    ctx.lineTo(badgeX - 33, badgeY + 14);
+    ctx.stroke();
+
+    // Draw inner decorative border (Stitching)
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.5)' : 'rgba(200, 150, 100, 0.7)'; // Thread color
+    ctx.setLineDash([4, 3]); // Dashed line for stitching
+    ctx.beginPath();
+    ctx.moveTo(badgeX, badgeY - 30);
+    ctx.lineTo(badgeX + 30, badgeY - 30);
+    ctx.lineTo(badgeX + 30, badgeY + 12);
+    ctx.lineTo(badgeX, badgeY + 44);
+    ctx.lineTo(badgeX - 30, badgeY + 12);
+    ctx.lineTo(badgeX - 30, badgeY - 30);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset line dash for stars/text
+
+    // Draw Rank Pips (Stars)
+    ctx.fillStyle = badgeColor;
+    for(let i = 0; i < pips; i++) {
+        const pipX = badgeX + (i - (pips - 1) / 2) * 18;
+        const outerRadius = 6;
+        const innerRadius = 2.5;
+        let rot = Math.PI / 2 * 3;
+        let x = pipX;
+        let y = badgeY + 10;
+        let step = Math.PI / 5;
+        
+        ctx.beginPath();
+        ctx.moveTo(pipX, badgeY + 10 - outerRadius);
+        for (let j = 0; j < 5; j++) {
+            x = pipX + Math.cos(rot) * outerRadius;
+            y = badgeY + 10 + Math.sin(rot) * outerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+            x = pipX + Math.cos(rot) * innerRadius;
+            y = badgeY + 10 + Math.sin(rot) * innerRadius;
+            ctx.lineTo(x, y);
+            rot += step;
+        }
+        ctx.lineTo(pipX, badgeY + 10 - outerRadius);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Draw black banner background around the rank text below the shield
+    ctx.fillStyle = nightVisionEnabled ? 'rgba(0, 10, 0, 1)' : 'black';
+    ctx.fillRect(badgeX - 40, badgeY + 53, 80, 24);
+    ctx.strokeStyle = badgeColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(badgeX - 40, badgeY + 53, 80, 24);
+
+    // Banner Top-Left Highlight
+    ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(badgeX - 39, badgeY + 76);
+    ctx.lineTo(badgeX - 39, badgeY + 54);
+    ctx.lineTo(badgeX + 39, badgeY + 54);
+    ctx.stroke();
+
+    // Draw Rank Text
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : 'white';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("RANK", badgeX, badgeY - 15);
+    
+    ctx.fillStyle = badgeColor;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(rank, badgeX, badgeY + 65);
     ctx.restore();
 
     // Draw menu overlay if open
