@@ -211,14 +211,18 @@ class Ship {
     }
 
     draw() {
+        // Calculate bobbing offset to exactly match the ocean horizon waves
+        const horizonOffset = Math.sin(time * 0.8) * 2.4;
+        const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+        
         ctx.fillStyle = '#1a1a1a'; // Almost black
         // Hull
-        ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+        ctx.fillRect(this.x - this.width / 2, this.y + bobOffset - this.height / 2, this.width, this.height);
         // Superstructure
-        ctx.fillRect(this.x - this.width / 4, this.y - this.height / 2 - 10, this.width / 2, 8);
+        ctx.fillRect(this.x - this.width / 4, this.y + bobOffset - this.height / 2 - 10, this.width / 2, 8);
         // Mast or radar
         ctx.fillStyle = 'black';
-        ctx.fillRect(this.x - 1, this.y - this.height / 2 - 15, 2, 15);
+        ctx.fillRect(this.x - 1, this.y + bobOffset - this.height / 2 - 15, 2, 15);
     }
 
     isOffScreen() {
@@ -241,7 +245,10 @@ class Crate {
 
     draw() {
         ctx.save();
-        ctx.translate(this.x, this.y);
+        // Match the exact ocean wave mathematical frequency
+        const horizonOffset = Math.sin(time * 0.8) * 2.4;
+        const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+        ctx.translate(this.x, this.y + bobOffset);
         
         // Draw wooden crate box
         ctx.fillStyle = '#8b5a2b';
