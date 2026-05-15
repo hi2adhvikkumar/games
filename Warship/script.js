@@ -208,12 +208,21 @@ class Projectile {
 }
 
 class Ship {
-    constructor() {
+    constructor(type = 'normal') {
         this.x = canvas.width;
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Between horizon and turret
-        this.width = 40;
-        this.height = 20;
-        this.speed = Math.random() * 2 + 1;
+        this.type = type;
+        if (this.type === 'battleship') {
+            this.width = 70;
+            this.height = 25;
+            this.speed = Math.random() * 0.8 + 0.4; // Slower speed
+            this.hp = 3; // Takes 3 hits
+        } else {
+            this.width = 40;
+            this.height = 20;
+            this.speed = Math.random() * 2 + 1;
+            this.hp = 1; // Takes 1 hit
+        }
         this.light = Math.random() < 0.25; // 25% chance to be lighter
     }
 
@@ -377,7 +386,8 @@ function shoot() {
 
 function spawnShip() {
     if (Math.random() < 0.02) {
-        ships.push(new Ship());
+        const type = Math.random() < 0.25 ? 'battleship' : 'normal'; // 25% chance to be a battleship
+        ships.push(new Ship(type));
     }
 }
 
@@ -404,9 +414,13 @@ function checkCollisions() {
                 playExplosionSound();
                 shakeIntensity = 8; // Trigger screen shake
                 projectiles.splice(i, 1);
-                ships.splice(j, 1);
-                score += 1;
-                scoreElement.textContent = `Sunken Ships: ${score}`;
+                
+                ship.hp -= 1;
+                if (ship.hp <= 0) {
+                    ships.splice(j, 1);
+                    score += 1;
+                    scoreElement.textContent = `Sunken Ships: ${score}`;
+                }
                 hit = true;
                 break;
             }
@@ -746,7 +760,8 @@ function draw() {
         });
     };
 
-    drawBlips(ships, '#ff4444', 'ship'); // Red blips for enemy ships
+    drawBlips(ships.filter(s => s.type !== 'battleship'), '#ff4444', 'ship'); // Red blips for normal ships
+    drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     ctx.restore();
 
