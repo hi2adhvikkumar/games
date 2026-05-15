@@ -217,6 +217,11 @@ class Ship {
             this.height = 25;
             this.speed = Math.random() * 0.8 + 0.4; // Slower speed
             this.hp = 3; // Takes 3 hits
+        } else if (this.type === 'ptboat') {
+            this.width = 25;
+            this.height = 12;
+            this.speed = Math.random() * 2.5 + 2.5; // Very fast
+            this.hp = 1; // Takes 1 hit
         } else {
             this.width = 40;
             this.height = 20;
@@ -237,25 +242,100 @@ class Ship {
         
         // Draw foamy water wake trailing behind the ship
         const wakeLength = 60;
-        const wakeY = this.y + bobOffset - 5; // Centered over the hull and superstructure
+        const wakeY = this.y + bobOffset + this.height / 2 - 2; // Near the waterline
         const gradient = ctx.createLinearGradient(this.x + this.width / 2 + wakeLength, wakeY, this.x, wakeY);
         gradient.addColorStop(0, 'rgba(90, 155, 212, 0)'); // Transparent at tail
         gradient.addColorStop(1, 'rgba(90, 155, 212, 0.5)'); // Semi-transparent at ship
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 30; // As tall as the ship bottom below the masts
+        ctx.lineWidth = 15; // Wake thickness
         ctx.beginPath();
         ctx.moveTo(this.x + this.width / 2 + wakeLength, wakeY);
         ctx.lineTo(this.x, wakeY);
         ctx.stroke();
 
-        ctx.fillStyle = '#1a1a1a'; // Almost black
-        // Hull
-        ctx.fillRect(this.x - this.width / 2, this.y + bobOffset - this.height / 2, this.width, this.height);
-        // Superstructure
-        ctx.fillRect(this.x - this.width / 4, this.y + bobOffset - this.height / 2 - 10, this.width / 2, 8);
-        // Mast or radar
-        ctx.fillStyle = 'black';
-        ctx.fillRect(this.x - 1, this.y + bobOffset - this.height / 2 - 15, 2, 15);
+        const bowX = this.x - this.width / 2;
+        const sternX = this.x + this.width / 2;
+        const deckY = this.y + bobOffset - this.height / 4;
+        const bottomY = this.y + bobOffset + this.height / 2;
+
+        // Draw Hull with slanted bow
+        ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a'; // Naval grey
+        ctx.beginPath();
+        ctx.moveTo(bowX, deckY); // Tip of bow
+        ctx.lineTo(sternX, deckY); // Deck line
+        ctx.lineTo(sternX, bottomY - 2); // Back stern
+        ctx.lineTo(bowX + this.width * 0.15, bottomY); // Bottom hull
+        ctx.quadraticCurveTo(bowX + this.width * 0.05, bottomY, bowX, deckY); // Curved bow upward
+        ctx.fill();
+
+        // Waterline (Dark stripe)
+        ctx.fillStyle = '#111';
+        ctx.fillRect(bowX + this.width * 0.12, bottomY - 3, this.width * 0.88, 3);
+        
+        // Superstructure and Details
+        if (this.type === 'battleship') {
+            // Main bridge
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
+            ctx.fillRect(this.x - this.width * 0.15, deckY - 12, this.width * 0.3, 12); // Base
+            ctx.fillRect(this.x - this.width * 0.05, deckY - 22, this.width * 0.15, 10); // Tower
+            
+            // Smokestacks
+            ctx.fillStyle = '#222';
+            ctx.fillRect(this.x + this.width * 0.1, deckY - 18, 6, 14);
+            ctx.fillRect(this.x + this.width * 0.18, deckY - 16, 5, 12);
+            
+            // Forward Cannon
+            ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+            ctx.fillRect(this.x - this.width * 0.3, deckY - 6, 12, 6); // Turret
+            ctx.fillRect(this.x - this.width * 0.3 - 12, deckY - 4, 12, 2); // Barrel facing left
+            
+            // Aft (Rear) Cannon
+            ctx.fillRect(this.x + this.width * 0.25, deckY - 6, 12, 6); // Turret
+            ctx.fillRect(this.x + this.width * 0.25 + 12, deckY - 4, 12, 2); // Barrel facing right
+
+            // Mast / Antenna
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width * 0.02, deckY - 22);
+            ctx.lineTo(this.x + this.width * 0.02, deckY - 35);
+            ctx.moveTo(this.x - this.width * 0.05, deckY - 28);
+            ctx.lineTo(this.x + this.width * 0.09, deckY - 28);
+            ctx.stroke();
+        } else if (this.type === 'ptboat') {
+            // PT Boat (Fast, small)
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
+            ctx.fillRect(this.x - this.width * 0.1, deckY - 6, this.width * 0.25, 6); // Small bridge
+            
+            // Tiny mast
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(this.x, deckY - 6);
+            ctx.lineTo(this.x - 2, deckY - 14);
+            ctx.stroke();
+        } else {
+            // Normal ship (e.g. Destroyer)
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
+            ctx.fillRect(this.x - this.width * 0.1, deckY - 8, this.width * 0.3, 8); // Bridge
+            
+            // Smokestack
+            ctx.fillStyle = '#222';
+            ctx.fillRect(this.x + this.width * 0.05, deckY - 14, 5, 10);
+            
+            // Forward Cannon
+            ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+            ctx.fillRect(this.x - this.width * 0.25, deckY - 4, 8, 4); // Turret
+            ctx.fillRect(this.x - this.width * 0.25 - 8, deckY - 3, 8, 2); // Barrel
+            
+            // Mast
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(this.x, deckY - 8);
+            ctx.lineTo(this.x, deckY - 18);
+            ctx.stroke();
+        }
     }
 
     isOffScreen() {
@@ -386,7 +466,10 @@ function shoot() {
 
 function spawnShip() {
     if (Math.random() < 0.02) {
-        const type = Math.random() < 0.25 ? 'battleship' : 'normal'; // 25% chance to be a battleship
+        const rand = Math.random();
+        let type = 'normal';
+        if (rand < 0.35) type = 'battleship'; // 35% chance
+        else if (rand < 0.55) type = 'ptboat'; // 20% chance
         ships.push(new Ship(type));
     }
 }
@@ -760,7 +843,8 @@ function draw() {
         });
     };
 
-    drawBlips(ships.filter(s => s.type !== 'battleship'), '#ff4444', 'ship'); // Red blips for normal ships
+    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat'), '#ff4444', 'ship'); // Red blips for normal ships
+    drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     ctx.restore();
