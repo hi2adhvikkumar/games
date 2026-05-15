@@ -125,6 +125,7 @@ let tripleAmmo = 40;
 let isMenuOpen = false;
 let gameStarted = false;
 let nightVisionEnabled = false;
+let shakeIntensity = 0;
 
 const turret = {
     x: canvas.width / 2,
@@ -401,6 +402,7 @@ function checkCollisions() {
             if (distance < proj.radius + ship.width / 2) {
                 explosions.push(new Explosion(ship.x, ship.y));
                 playExplosionSound();
+                shakeIntensity = 8; // Trigger screen shake
                 projectiles.splice(i, 1);
                 ships.splice(j, 1);
                 score += 1;
@@ -433,6 +435,11 @@ function checkCollisions() {
 function update() {
     updateTurretAngle();
     time += 0.05; // For wave animation
+    
+    if (shakeIntensity > 0) {
+        shakeIntensity -= 0.5;
+        if (shakeIntensity < 0) shakeIntensity = 0;
+    }
 
     projectiles.forEach(proj => proj.update());
     projectiles = projectiles.filter(proj => !proj.isOffScreen());
@@ -460,6 +467,14 @@ function update() {
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply Screen Shake
+    ctx.save();
+    if (shakeIntensity > 0) {
+        const dx = (Math.random() - 0.5) * shakeIntensity;
+        const dy = (Math.random() - 0.5) * shakeIntensity;
+        ctx.translate(dx, dy);
+    }
 
     // Clip to the periscope view (circular)
     ctx.save();
@@ -592,7 +607,7 @@ function draw() {
     // Apply Night Vision green tint over the periscope
     if (nightVisionEnabled) {
         ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
 
     ctx.restore();
@@ -605,7 +620,7 @@ function draw() {
     // Black out everything outside the periscope circle
     ctx.fillStyle = 'black';
     ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
+    ctx.rect(-50, -50, canvas.width + 100, canvas.height + 100);
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2, true);
     ctx.fill();
 
@@ -754,7 +769,7 @@ function draw() {
 
     // Draw Rank Badge in the right-middle
     ctx.save();
-    const badgeX = canvas.width - 70;
+    const badgeX = canvas.width - 50;
     const badgeY = canvas.height / 2 - 20;
 
     let rank = "SEAMAN";
@@ -787,7 +802,7 @@ function draw() {
         bgGrad.addColorStop(0, 'rgba(0, 50, 0, 1)'); // Brighter top-left for light source
         bgGrad.addColorStop(1, 'black');
     } else {
-        bgGrad.addColorStop(0, 'rgba(65, 30, 15, 1)'); // Brighter brown top-left for light source
+        bgGrad.addColorStop(0, 'rgba(65, 65, 65, 1)'); // Brighter grey top-left for light source
         bgGrad.addColorStop(1, 'black');   // Pure black
     }
 
@@ -831,7 +846,7 @@ function draw() {
 
     // Draw inner decorative border (Stitching)
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.5)' : 'rgba(200, 150, 100, 0.7)'; // Thread color
+    ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.5)' : 'rgba(180, 180, 180, 0.7)'; // Thread color
     ctx.setLineDash([4, 3]); // Dashed line for stitching
     ctx.beginPath();
     ctx.moveTo(badgeX, badgeY - 30);
@@ -903,7 +918,7 @@ function draw() {
     if (isMenuOpen) {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
         ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
@@ -994,6 +1009,8 @@ function draw() {
     ctx.textBaseline = 'middle';
     const btnText = weaponType === 'triple' ? `Triple (${tripleAmmo})` : `Single (∞)`;
     ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2);
+
+    ctx.restore(); // Restore from Screen Shake
 }
 
 canvas.addEventListener('mousemove', (e) => {
