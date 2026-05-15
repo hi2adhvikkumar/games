@@ -116,6 +116,102 @@ function playExplosionSound() {
     }
 }
 
+function playShootSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 1.8;
+
+        // Layer 1: Deep sub-bass boom (Punchier)
+        const oscBoom = audioCtx.createOscillator();
+        const gainBoom = audioCtx.createGain();
+        
+        oscBoom.type = 'sine';
+        oscBoom.frequency.setValueAtTime(200, now); // Higher initial pitch for sharp kick
+        oscBoom.frequency.exponentialRampToValueAtTime(30, now + 0.15); // Faster drop
+        oscBoom.frequency.linearRampToValueAtTime(20, now + 1.0);
+        
+        gainBoom.gain.setValueAtTime(0, now);
+        gainBoom.gain.linearRampToValueAtTime(0.5, now + 0.01);
+        gainBoom.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        oscBoom.connect(gainBoom);
+        gainBoom.connect(audioCtx.destination);
+        
+        oscBoom.start(now);
+        oscBoom.stop(now + duration);
+
+        // Layer 2: Gritty metallic crack (initial blast)
+        const oscCrack = audioCtx.createOscillator();
+        const gainCrack = audioCtx.createGain();
+        oscCrack.type = 'square';
+        oscCrack.frequency.setValueAtTime(350, now); // Brighter crack
+        oscCrack.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+        
+        gainCrack.gain.setValueAtTime(0, now);
+        gainCrack.gain.linearRampToValueAtTime(0.4, now + 0.01);
+        gainCrack.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        
+        const filterCrack = audioCtx.createBiquadFilter();
+        filterCrack.type = 'lowpass';
+        filterCrack.frequency.setValueAtTime(4000, now);
+        filterCrack.frequency.linearRampToValueAtTime(400, now + 0.2);
+        
+        oscCrack.connect(filterCrack);
+        filterCrack.connect(gainCrack);
+        gainCrack.connect(audioCtx.destination);
+        oscCrack.start(now);
+        oscCrack.stop(now + 0.3);
+
+        // Layer 3: Explosive white noise blast
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * 0.8;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(3000, now); // Starts much brighter
+        noiseFilter.frequency.exponentialRampToValueAtTime(100, now + 0.8);
+        
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(0.5, now + 0.01);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+        
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+
+        // Layer 4: Distant Ocean Echo (Thunderous rumble after the shot)
+        const echoFilter = audioCtx.createBiquadFilter();
+        echoFilter.type = 'lowpass';
+        echoFilter.frequency.setValueAtTime(400, now + 0.3);
+        echoFilter.frequency.linearRampToValueAtTime(50, now + duration);
+        
+        const echoGain = audioCtx.createGain();
+        echoGain.gain.setValueAtTime(0, now);
+        echoGain.gain.linearRampToValueAtTime(0, now + 0.25); // Wait for initial blast to clear
+        echoGain.gain.linearRampToValueAtTime(0.15, now + 0.4); // Swell back up
+        echoGain.gain.exponentialRampToValueAtTime(0.01, now + duration); // Fade out slowly
+        
+        noise.connect(echoFilter);
+        echoFilter.connect(echoGain);
+        echoGain.connect(audioCtx.destination);
+        
+        noise.start(now);
+
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
 let score = 0;
 let highScore = parseInt(localStorage.getItem('warshipHighScore')) || 0;
 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore}`;
@@ -490,10 +586,12 @@ function updateTurretAngle() {
 function shoot() {
     if (weaponType === 'single') {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12)); // Slower speed
+        playShootSound();
     } else if (weaponType === 'triple' && tripleAmmo > 0) {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8));
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8));
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8));
+        playShootSound();
         tripleAmmo--;
         if (tripleAmmo <= 0) {
             weaponType = 'single'; // Auto-switch to single when out of ammo
