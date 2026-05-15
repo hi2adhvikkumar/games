@@ -117,6 +117,9 @@ function playExplosionSound() {
 }
 
 let score = 0;
+let highScore = parseInt(localStorage.getItem('warshipHighScore')) || 0;
+scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore}`;
+
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
 let time = 0;
@@ -502,7 +505,11 @@ function checkCollisions() {
                 if (ship.hp <= 0) {
                     ships.splice(j, 1);
                     score += 1;
-                    scoreElement.textContent = `Sunken Ships: ${score}`;
+                    if (score > highScore) {
+                        highScore = score;
+                        localStorage.setItem('warshipHighScore', highScore);
+                    }
+                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore}`;
                 }
                 hit = true;
                 break;
