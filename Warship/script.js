@@ -366,13 +366,47 @@ class Crate {
         const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         ctx.translate(this.x, this.y + bobOffset);
         
-        // Draw wooden crate box
-        ctx.fillStyle = '#8b5a2b';
+        // Draw floating ripple/shadow under the crate
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, this.height / 2, this.width * 0.8, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Base Crate Background (Dark wood)
+        ctx.fillStyle = '#4a2f1d'; 
         ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-        // Draw green plus symbol for ammo
-        ctx.fillStyle = '#32cd32';
-        ctx.fillRect(-this.width / 4, -this.height / 8, this.width / 2, this.height / 4);
-        ctx.fillRect(-this.width / 8, -this.height / 4, this.width / 4, this.height / 2);
+        
+        // Horizontal wooden planks (Lighter wood)
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(-this.width / 2, -this.height / 2 + 1, this.width, 4);
+        ctx.fillRect(-this.width / 2, -this.height / 2 + 6, this.width, 4);
+        ctx.fillRect(-this.width / 2, -this.height / 2 + 11, this.width, 4);
+
+        // Dark outline for 3D depth
+        ctx.strokeStyle = '#2d1a0c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+
+        // Metal reinforcing straps (vertical)
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(-this.width / 2 + 4, -this.height / 2, 3, this.height);
+        ctx.fillRect(this.width / 2 - 7, -this.height / 2, 3, this.height);
+        
+        // Small metal rivets
+        ctx.fillStyle = '#888888';
+        ctx.fillRect(-this.width / 2 + 5, -this.height / 2 + 2, 1, 1);
+        ctx.fillRect(-this.width / 2 + 5, this.height / 2 - 3, 1, 1);
+        ctx.fillRect(this.width / 2 - 6, -this.height / 2 + 2, 1, 1);
+        ctx.fillRect(this.width / 2 - 6, this.height / 2 - 3, 1, 1);
+
+        // Ammo symbol: 3 small artillery shells in the center
+        ctx.fillStyle = '#ffd700'; // Gold/Brass
+        ctx.fillRect(-4, -2, 2, 5);
+        ctx.beginPath(); ctx.moveTo(-4, -2); ctx.lineTo(-3, -4); ctx.lineTo(-2, -2); ctx.fill();
+        ctx.fillRect(-1, -2, 2, 5);
+        ctx.beginPath(); ctx.moveTo(-1, -2); ctx.lineTo(0, -4); ctx.lineTo(1, -2); ctx.fill();
+        ctx.fillRect(2, -2, 2, 5);
+        ctx.beginPath(); ctx.moveTo(2, -2); ctx.lineTo(3, -4); ctx.lineTo(4, -2); ctx.fill();
         
         ctx.restore();
     }
