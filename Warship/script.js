@@ -301,6 +301,7 @@ let highScore = parseInt(localStorage.getItem('warshipHighScore')) || 0;
 let credits = 0;
 let projSpeedBonus = 0;
 let ammoBonus = 0;
+let radarBonus = 0;
 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
 scoreElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
 radarCountElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
@@ -829,6 +830,7 @@ function spawnShip() {
         let type = 'normal';
         if (rand < 0.35) type = 'battleship'; // 35% chance
         else if (rand < 0.55) type = 'ptboat'; // 20% chance
+        else if (rand < 0.70) type = 'submarine'; // 15% chance
         ships.push(new Ship(type));
     }
 }
@@ -852,6 +854,8 @@ function checkCollisions() {
             const dy = proj.y - ship.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance < proj.radius + ship.width / 2) {
+                if (ship.type === 'submarine' && ship.depth > 5) continue; // Too deep to hit!
+
                 explosions.push(new Explosion(ship.x, ship.y));
                 playExplosionSound();
                 shakeIntensity = 8; // Trigger screen shake
@@ -864,6 +868,8 @@ function checkCollisions() {
                     if (ship.type === 'dreadnought') {
                         dreadnoughtActive = false;
                         credits += 150; // Boss defeated!
+                    } else if (ship.type === 'submarine') {
+                        credits += 40; // High reward for sub!
                     } else {
                         credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
                     }
@@ -1171,7 +1177,7 @@ function draw() {
     ctx.save();
     const radarCX = canvas.width / 2 + 360;
     const radarCY = canvas.height / 2 + 220;
-    const radarRadius = 75;
+    const radarRadius = 75 + (radarBonus * 8); // Radar visually grows with upgrade
 
     // Radar background
     ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
@@ -1218,7 +1224,8 @@ function draw() {
             const dx = item.x - turret.x;
             const dy = item.y - turret.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const scale = radarRadius / 450; // Scale world distance down to radar size
+            const radarRange = 450 + (radarBonus * 120); // Radar detects ships further away!
+            const scale = radarRadius / radarRange; // Scale world distance down to radar size
             if (dist * scale < radarRadius - 3) {
                 ctx.fillStyle = color;
                 ctx.beginPath();
@@ -1250,10 +1257,11 @@ function draw() {
         });
     };
 
-    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought'), '#ff4444', 'ship'); // Red blips for normal ships
+    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought' && s.type !== 'submarine'), '#ff4444', 'ship'); // Red blips for normal ships
     drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
+    drawBlips(ships.filter(s => s.type === 'submarine'), '#00ffff', 'submarine'); // Cyan blips for submarines
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     ctx.restore();
 
@@ -1516,28 +1524,29 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 200, 500, 400);
+        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 230, 500, 460);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 200, 500, 400);
+        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 230, 500, 460);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 150);
+        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 180);
         
         ctx.font = '20px monospace';
-        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 100);
+        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 140);
 
         // Upgrade 1
         const u1X = canvas.width / 2 - 200;
-        const u1Y = canvas.height / 2 - 50;
+        const u1Y = canvas.height / 2 - 90;
         ctx.fillStyle = credits >= 50 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u1X, u1Y, 400, 50);
         ctx.strokeStyle = credits >= 50 ? '#00ff00' : '#888';
         ctx.strokeRect(u1X, u1Y, 400, 50);
         ctx.fillStyle = credits >= 50 ? '#00ff00' : '#888';
+        ctx.font = '16px monospace';
         ctx.textAlign = 'left';
         ctx.fillText(`Faster Torpedoes (+Speed) [$50]`, u1X + 20, u1Y + 25);
         ctx.textAlign = 'right';
@@ -1545,19 +1554,34 @@ function draw() {
 
         // Upgrade 2
         const u2X = canvas.width / 2 - 200;
-        const u2Y = canvas.height / 2 + 20;
+        const u2Y = canvas.height / 2 - 20;
         ctx.fillStyle = credits >= 75 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u2X, u2Y, 400, 50);
         ctx.strokeStyle = credits >= 75 ? '#00ff00' : '#888';
         ctx.strokeRect(u2X, u2Y, 400, 50);
         ctx.fillStyle = credits >= 75 ? '#00ff00' : '#888';
+        ctx.font = '16px monospace';
         ctx.textAlign = 'left';
         ctx.fillText(`Ammo Scavenger (+Ammo) [$75]`, u2X + 20, u2Y + 25);
         ctx.textAlign = 'right';
         ctx.fillText(`Lvl ${ammoBonus}`, u2X + 380, u2Y + 25);
         
+        // Upgrade 3
+        const u3X = canvas.width / 2 - 200;
+        const u3Y = canvas.height / 2 + 50;
+        ctx.fillStyle = credits >= 100 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u3X, u3Y, 400, 50);
+        ctx.strokeStyle = credits >= 100 ? '#00ff00' : '#888';
+        ctx.strokeRect(u3X, u3Y, 400, 50);
+        ctx.fillStyle = credits >= 100 ? '#00ff00' : '#888';
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Advanced Radar (+Range) [$100]`, u3X + 20, u3Y + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText(`Lvl ${radarBonus}`, u3X + 380, u3Y + 25);
+        
         // Draw Close Upgrades Button
-        const closeUpgBtnY = canvas.height / 2 + 120;
+        const closeUpgBtnY = canvas.height / 2 + 130;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(u2X, closeUpgBtnY, 400, 50);
         ctx.strokeStyle = '#00ff00';
