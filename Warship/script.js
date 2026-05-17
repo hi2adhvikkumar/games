@@ -302,6 +302,7 @@ let credits = 0;
 let projSpeedBonus = 0;
 let ammoBonus = 0;
 let radarBonus = 0;
+let homingBonus = 0;
 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
 scoreElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
 radarCountElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
@@ -311,6 +312,7 @@ let mouseY = canvas.height / 2;
 let time = 0;
 let weaponType = 'single';
 let tripleAmmo = 40;
+let homingAmmo = 0;
 let isMenuOpen = false;
 let isUpgradesOpen = false;
 let gameStarted = false;
@@ -318,8 +320,8 @@ let nightVisionEnabled = false;
 let shakeIntensity = 0;
 let dreadnoughtActive = false;
 let nextBossScore = 20; // Trigger the boss naturally every 20 points
-let spawnDreadnoughtPending = true; // Spawn automatically!
-let dreadnoughtWarningTimer = 180;
+let spawnDreadnoughtPending = false; 
+let dreadnoughtWarningTimer = 0;
 
 const turret = {
     x: canvas.width / 2,
@@ -351,7 +353,7 @@ const viewTop = canvas.height / 2 - 300;
 const viewBottom = canvas.height / 2 + 300;
 
 class Projectile {
-    constructor(x, y, angle, speed = 10, targetY = horizonY) {
+    constructor(x, y, angle, speed = 10, targetY = horizonY, isHoming = false) {
         this.x = x;
         this.y = y;
         this.vx = Math.cos(angle) * speed;
@@ -362,9 +364,40 @@ class Projectile {
         this.radius = this.width / 2; // For collision
         this.trail = [];
         this.targetY = targetY; // Track where it should hit the water
+        this.isHoming = isHoming;
     }
 
     update() {
+        this.lockedShip = null; // Reset lock-on state every frame
+        if (this.isHoming && ships.length > 0) {
+            let nearestShip = null;
+            let minDist = Infinity;
+            for (const ship of ships) {
+                if (ship.type === 'submarine' && ship.depth > 5) continue; // Ignore submerged subs
+                const dx = ship.x - this.x;
+                const dy = ship.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestShip = ship;
+                }
+            }
+            if (nearestShip) {
+                this.lockedShip = nearestShip; // Register the lock-on!
+                
+                const targetAngle = Math.atan2(nearestShip.y - this.y, nearestShip.x - this.x);
+                let angleDiff = targetAngle - this.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                const turnRate = 0.02 * Math.max(1, homingBonus); // Curving gets sharper with upgrades!
+                this.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnRate);
+                
+                const speed = Math.hypot(this.vx, this.vy);
+                this.vx = Math.cos(this.angle) * speed;
+                this.vy = Math.sin(this.angle) * speed;
+            }
+        }
         this.x += this.vx;
         this.y += this.vy;
         this.trail.push({x: this.x, y: this.y});
@@ -374,6 +407,23 @@ class Projectile {
     }
 
     draw() {
+        // Draw Lock-On Reticle over the hunted ship
+        if (this.lockedShip) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
+            ctx.lineWidth = 1.5;
+            
+            // Draw a spinning, tracking crosshair
+            ctx.translate(this.lockedShip.x, this.lockedShip.y);
+            ctx.rotate(time * 2);
+            ctx.beginPath();
+            ctx.arc(0, 0, 25, 0, Math.PI * 2);
+            ctx.moveTo(-35, 0); ctx.lineTo(35, 0);
+            ctx.moveTo(0, -35); ctx.lineTo(0, 35);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // Draw trail as a fading line
         if (this.trail.length > 1) {
             const gradient = ctx.createLinearGradient(this.trail[0].x, this.trail[0].y, this.x, this.y);
@@ -807,16 +857,23 @@ function updateTurretAngle() {
 
 function shoot() {
     if (weaponType === 'single') {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, horizonY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, horizonY, false));
         playShootSound();
     } else if (weaponType === 'triple' && tripleAmmo > 0) {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, horizonY));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, horizonY));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8 + projSpeedBonus * 2, horizonY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, horizonY, false));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, horizonY, false));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8 + projSpeedBonus * 2, horizonY, false));
         playShootSound();
         tripleAmmo--;
         if (tripleAmmo <= 0) {
-            weaponType = 'single'; // Auto-switch to single when out of ammo
+            weaponType = homingAmmo > 0 ? 'homing' : 'single'; // Auto-switch when out of ammo
+        }
+    } else if (weaponType === 'homing' && homingAmmo > 0) {
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 10 + projSpeedBonus * 2, horizonY, true));
+        playShootSound();
+        homingAmmo--;
+        if (homingAmmo <= 0) {
+            weaponType = 'single';
         }
     }
 }
@@ -904,6 +961,9 @@ function checkCollisions() {
                 projectiles.splice(i, 1);
                 crates.splice(k, 1);
                 tripleAmmo += (tripleAmmo <= 30) ? (7 + ammoBonus * 3) : 2; // Replenish ammo when destroyed
+                if (homingBonus > 0) {
+                    homingAmmo += (homingAmmo <= 15) ? (3 + ammoBonus * 1) : 1; // Also replenish homing ammo
+                }
                 break;
             }
         }
@@ -1523,68 +1583,84 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 230, 500, 460);
+        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 260, 500, 520);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 230, 500, 460);
+        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 260, 500, 520);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 180);
+        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 210);
         
         ctx.font = '20px monospace';
-        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 140);
+        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 170);
 
         // Upgrade 1
-        const u1X = canvas.width / 2 - 200;
-        const u1Y = canvas.height / 2 - 90;
-        ctx.fillStyle = credits >= 50 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
-        ctx.fillRect(u1X, u1Y, 400, 50);
-        ctx.strokeStyle = credits >= 50 ? '#00ff00' : '#888';
-        ctx.strokeRect(u1X, u1Y, 400, 50);
-        ctx.fillStyle = credits >= 50 ? '#00ff00' : '#888';
+        const u1X = canvas.width / 2 - 230;
+        const u1Y = canvas.height / 2 - 120;
+        const canBuyU1 = credits >= 50 && projSpeedBonus < 5;
+        ctx.fillStyle = canBuyU1 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u1X, u1Y, 460, 50);
+        ctx.strokeStyle = canBuyU1 ? '#00ff00' : '#888';
+        ctx.strokeRect(u1X, u1Y, 460, 50);
+        ctx.fillStyle = canBuyU1 ? '#00ff00' : '#888';
         ctx.font = '16px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`Faster Torpedoes (+Speed) [$50]`, u1X + 20, u1Y + 25);
+        ctx.fillText(projSpeedBonus >= 5 ? `Faster Torpedoes (MAX)` : `Faster Torpedoes (+Speed) [$50]`, u1X + 20, u1Y + 25);
         ctx.textAlign = 'right';
-        ctx.fillText(`Lvl ${projSpeedBonus}`, u1X + 380, u1Y + 25);
+        ctx.fillText(projSpeedBonus >= 5 ? `MAX` : `Lvl ${projSpeedBonus}`, u1X + 440, u1Y + 25);
 
         // Upgrade 2
-        const u2X = canvas.width / 2 - 200;
-        const u2Y = canvas.height / 2 - 20;
+        const u2X = canvas.width / 2 - 230;
+        const u2Y = canvas.height / 2 - 50;
         ctx.fillStyle = credits >= 75 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
-        ctx.fillRect(u2X, u2Y, 400, 50);
+        ctx.fillRect(u2X, u2Y, 460, 50);
         ctx.strokeStyle = credits >= 75 ? '#00ff00' : '#888';
-        ctx.strokeRect(u2X, u2Y, 400, 50);
+        ctx.strokeRect(u2X, u2Y, 460, 50);
         ctx.fillStyle = credits >= 75 ? '#00ff00' : '#888';
         ctx.font = '16px monospace';
         ctx.textAlign = 'left';
         ctx.fillText(`Ammo Scavenger (+Ammo) [$75]`, u2X + 20, u2Y + 25);
         ctx.textAlign = 'right';
-        ctx.fillText(`Lvl ${ammoBonus}`, u2X + 380, u2Y + 25);
+        ctx.fillText(`Lvl ${ammoBonus}`, u2X + 440, u2Y + 25);
         
         // Upgrade 3
-        const u3X = canvas.width / 2 - 200;
-        const u3Y = canvas.height / 2 + 50;
+        const u3X = canvas.width / 2 - 230;
+        const u3Y = canvas.height / 2 + 20;
         ctx.fillStyle = credits >= 100 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
-        ctx.fillRect(u3X, u3Y, 400, 50);
+        ctx.fillRect(u3X, u3Y, 460, 50);
         ctx.strokeStyle = credits >= 100 ? '#00ff00' : '#888';
-        ctx.strokeRect(u3X, u3Y, 400, 50);
+        ctx.strokeRect(u3X, u3Y, 460, 50);
         ctx.fillStyle = credits >= 100 ? '#00ff00' : '#888';
         ctx.font = '16px monospace';
         ctx.textAlign = 'left';
         ctx.fillText(`Advanced Radar (+Range) [$100]`, u3X + 20, u3Y + 25);
         ctx.textAlign = 'right';
-        ctx.fillText(`Lvl ${radarBonus}`, u3X + 380, u3Y + 25);
+        ctx.fillText(`Lvl ${radarBonus}`, u3X + 440, u3Y + 25);
+        
+        // Upgrade 4
+        const u4X = canvas.width / 2 - 230;
+        const u4Y = canvas.height / 2 + 90;
+        const canBuyU4 = credits >= 125 && homingBonus < 5;
+        ctx.fillStyle = canBuyU4 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u4X, u4Y, 460, 50);
+        ctx.strokeStyle = canBuyU4 ? '#00ff00' : '#888';
+        ctx.strokeRect(u4X, u4Y, 460, 50);
+        ctx.fillStyle = canBuyU4 ? '#00ff00' : '#888';
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(homingBonus >= 5 ? `Homing Torpedoes (MAX)` : `Homing Torpedoes (+Tracking) [$125]`, u4X + 20, u4Y + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText(homingBonus >= 5 ? `MAX` : `Lvl ${homingBonus}`, u4X + 440, u4Y + 25);
         
         // Draw Close Upgrades Button
-        const closeUpgBtnY = canvas.height / 2 + 130;
+        const closeUpgBtnY = canvas.height / 2 + 160;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
-        ctx.fillRect(u2X, closeUpgBtnY, 400, 50);
+        ctx.fillRect(u2X, closeUpgBtnY, 460, 50);
         ctx.strokeStyle = '#00ff00';
-        ctx.strokeRect(u2X, closeUpgBtnY, 400, 50);
+        ctx.strokeRect(u2X, closeUpgBtnY, 460, 50);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 18px monospace';
@@ -1650,10 +1726,12 @@ function draw() {
     const btnHeight = 35;
     
     if (nightVisionEnabled) {
-        ctx.fillStyle = weaponType === 'triple' ? 'rgba(0, 100, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
+        ctx.fillStyle = weaponType === 'single' ? 'rgba(0, 40, 0, 0.8)' : 'rgba(0, 100, 0, 0.8)';
         ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
     } else {
-        ctx.fillStyle = weaponType === 'triple' ? 'rgba(255, 68, 68, 0.8)' : 'rgba(68, 170, 255, 0.8)';
+        if (weaponType === 'single') ctx.fillStyle = 'rgba(68, 170, 255, 0.8)';
+        else if (weaponType === 'triple') ctx.fillStyle = 'rgba(255, 68, 68, 0.8)';
+        else ctx.fillStyle = 'rgba(255, 150, 0, 0.8)'; // Orange for homing
         ctx.strokeStyle = 'white';
     }
     
@@ -1665,7 +1743,9 @@ function draw() {
     ctx.font = nightVisionEnabled ? 'bold 16px monospace' : '16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const btnText = weaponType === 'triple' ? `Triple (${tripleAmmo})` : `Single (∞)`;
+    let btnText = `Single (∞)`;
+    if (weaponType === 'triple') btnText = `Triple (${tripleAmmo})`;
+    else if (weaponType === 'homing') btnText = `Homing (${homingAmmo})`;
     ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2);
 
     ctx.restore(); // Restore from Screen Shake
@@ -1685,6 +1765,15 @@ canvas.addEventListener('click', (e) => {
     const cy = e.clientY - rect.top;
 
     if (!gameStarted) {
+        const bossBtnW = 280;
+        const bossBtnH = 60;
+        const bossBtnX = canvas.width / 2 - bossBtnW / 2;
+        const bossBtnY = canvas.height / 2 + 10;
+        
+        if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
+            spawnDreadnoughtPending = true;
+            dreadnoughtWarningTimer = 180;
+        }
         gameStarted = true;
         return;
     }
@@ -1709,10 +1798,10 @@ canvas.addEventListener('click', (e) => {
 
     if (isUpgradesOpen) {
         // Check Upgrade 1 click
-        const u1X = canvas.width / 2 - 200;
-        const u1Y = canvas.height / 2 - 90;
-        if (cx >= u1X && cx <= u1X + 400 && cy >= u1Y && cy <= u1Y + 50) {
-            if (credits >= 50) {
+        const u1X = canvas.width / 2 - 230;
+        const u1Y = canvas.height / 2 - 120;
+        if (cx >= u1X && cx <= u1X + 460 && cy >= u1Y && cy <= u1Y + 50) {
+            if (credits >= 50 && projSpeedBonus < 5) {
                 credits -= 50;
                 projSpeedBonus++;
                 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
@@ -1720,9 +1809,9 @@ canvas.addEventListener('click', (e) => {
         }
         
         // Check Upgrade 2 click
-        const u2X = canvas.width / 2 - 200;
-        const u2Y = canvas.height / 2 - 20;
-        if (cx >= u2X && cx <= u2X + 400 && cy >= u2Y && cy <= u2Y + 50) {
+        const u2X = canvas.width / 2 - 230;
+        const u2Y = canvas.height / 2 - 50;
+        if (cx >= u2X && cx <= u2X + 460 && cy >= u2Y && cy <= u2Y + 50) {
             if (credits >= 75) {
                 credits -= 75;
                 ammoBonus++;
@@ -1731,9 +1820,9 @@ canvas.addEventListener('click', (e) => {
         }
         
         // Check Upgrade 3 click
-        const u3X = canvas.width / 2 - 200;
-        const u3Y = canvas.height / 2 + 50;
-        if (cx >= u3X && cx <= u3X + 400 && cy >= u3Y && cy <= u3Y + 50) {
+        const u3X = canvas.width / 2 - 230;
+        const u3Y = canvas.height / 2 + 20;
+        if (cx >= u3X && cx <= u3X + 460 && cy >= u3Y && cy <= u3Y + 50) {
             if (credits >= 100) {
                 credits -= 100;
                 radarBonus++;
@@ -1741,9 +1830,23 @@ canvas.addEventListener('click', (e) => {
             }
         }
         
+        // Check Upgrade 4 click
+        const u4X = canvas.width / 2 - 230;
+        const u4Y = canvas.height / 2 + 90;
+        if (cx >= u4X && cx <= u4X + 460 && cy >= u4Y && cy <= u4Y + 50) {
+            if (credits >= 125 && homingBonus < 5) {
+                credits -= 125;
+                if (homingBonus === 0) {
+                    homingAmmo += 10; // Give initial ammo when first unlocked!
+                }
+                homingBonus++;
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
+        }
+        
         // Check Close Upgrades click
-        const closeUpgBtnY = canvas.height / 2 + 130;
-        if (cx >= u2X && cx <= u2X + 400 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
+        const closeUpgBtnY = canvas.height / 2 + 160;
+        if (cx >= u2X && cx <= u2X + 460 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
             isUpgradesOpen = false;
         }
         return; // Prevent shooting while upgrades menu is open
@@ -1789,8 +1892,12 @@ canvas.addEventListener('click', (e) => {
     const btnHeight = 35;
 
     if (cx >= btnX && cx <= btnX + btnWidth && cy >= btnY && cy <= btnY + btnHeight) {
-        if (weaponType === 'triple' || tripleAmmo > 0) {
-            weaponType = weaponType === 'single' ? 'triple' : 'single';
+        if (weaponType === 'single') {
+            weaponType = tripleAmmo > 0 ? 'triple' : (homingAmmo > 0 ? 'homing' : 'single');
+        } else if (weaponType === 'triple') {
+            weaponType = homingAmmo > 0 ? 'homing' : 'single';
+        } else if (weaponType === 'homing') {
+            weaponType = 'single';
         }
     } else {
         shoot();
@@ -1810,9 +1917,25 @@ function gameLoop() {
         ctx.textBaseline = 'middle';
         ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 60);
         
+        // Draw Spawn Boss Button on the Start Screen
+        const bossBtnW = 280;
+        const bossBtnH = 60;
+        const bossBtnX = canvas.width / 2 - bossBtnW / 2;
+        const bossBtnY = canvas.height / 2 + 10;
+        
+        ctx.fillStyle = 'rgba(200, 0, 0, 0.9)';
+        ctx.fillRect(bossBtnX, bossBtnY, bossBtnW, bossBtnH);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bossBtnX, bossBtnY, bossBtnW, bossBtnH);
+        
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 24px monospace';
-        ctx.fillText('CLICK ANYWHERE TO START', canvas.width / 2, canvas.height / 2 + 40);
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText('START & SPAWN BOSS', canvas.width / 2, bossBtnY + bossBtnH / 2);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 110);
         ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
