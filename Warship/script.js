@@ -806,14 +806,13 @@ function updateTurretAngle() {
 }
 
 function shoot() {
-    const targetY = Math.max(mouseY, horizonY); // Cap distance to the horizon at max
     if (weaponType === 'single') {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, targetY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, horizonY));
         playShootSound();
     } else if (weaponType === 'triple' && tripleAmmo > 0) {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, targetY));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, targetY));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8 + projSpeedBonus * 2, targetY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, horizonY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, horizonY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8 + projSpeedBonus * 2, horizonY));
         playShootSound();
         tripleAmmo--;
         if (tripleAmmo <= 0) {
@@ -1711,7 +1710,7 @@ canvas.addEventListener('click', (e) => {
     if (isUpgradesOpen) {
         // Check Upgrade 1 click
         const u1X = canvas.width / 2 - 200;
-        const u1Y = canvas.height / 2 - 50;
+        const u1Y = canvas.height / 2 - 90;
         if (cx >= u1X && cx <= u1X + 400 && cy >= u1Y && cy <= u1Y + 50) {
             if (credits >= 50) {
                 credits -= 50;
@@ -1722,7 +1721,7 @@ canvas.addEventListener('click', (e) => {
         
         // Check Upgrade 2 click
         const u2X = canvas.width / 2 - 200;
-        const u2Y = canvas.height / 2 + 20;
+        const u2Y = canvas.height / 2 - 20;
         if (cx >= u2X && cx <= u2X + 400 && cy >= u2Y && cy <= u2Y + 50) {
             if (credits >= 75) {
                 credits -= 75;
@@ -1731,8 +1730,19 @@ canvas.addEventListener('click', (e) => {
             }
         }
         
+        // Check Upgrade 3 click
+        const u3X = canvas.width / 2 - 200;
+        const u3Y = canvas.height / 2 + 50;
+        if (cx >= u3X && cx <= u3X + 400 && cy >= u3Y && cy <= u3Y + 50) {
+            if (credits >= 100) {
+                credits -= 100;
+                radarBonus++;
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
+        }
+        
         // Check Close Upgrades click
-        const closeUpgBtnY = canvas.height / 2 + 120;
+        const closeUpgBtnY = canvas.height / 2 + 130;
         if (cx >= u2X && cx <= u2X + 400 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
             isUpgradesOpen = false;
         }
