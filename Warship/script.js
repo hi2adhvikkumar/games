@@ -3,6 +3,14 @@ const ctx = canvas.getContext('2d');
 const scoreElement = document.getElementById('score');
 const radarCountElement = document.getElementById('radar-count');
 
+// Increase canvas size to fill the window so nothing gets cut off!
+document.body.style.margin = '0';
+document.body.style.overflow = 'hidden';
+canvas.style.display = 'block';
+
+canvas.width = window.innerWidth || 1200;
+canvas.height = window.innerHeight || 800;
+
 let audioCtx;
 function initAudio() {
     try {
@@ -21,16 +29,58 @@ function initAudio() {
 // Initialize audio and start game on any click or key press anywhere on the window
 window.addEventListener('click', () => {
     initAudio();
-    if (!gameStarted) {
-        gameStarted = true;
-    }
 });
-window.addEventListener('keydown', () => {
+window.addEventListener('keydown', (e) => {
     initAudio();
     if (!gameStarted) {
         gameStarted = true;
     }
+    // Add keyboard shortcut 'U' to open upgrades
+    if (e.key && e.key.toLowerCase() === 'u') {
+        isUpgradesOpen = !isUpgradesOpen;
+        if (isUpgradesOpen) isMenuOpen = false;
+    }
+    // Cheat code 'B' to instantly spawn the Boss (Dreadnought)
+    if (e.key && e.key.toLowerCase() === 'b') {
+        spawnDreadnoughtPending = true;
+        dreadnoughtWarningTimer = 180;
+    }
 });
+
+const addBossBtn = () => {
+    if (document.getElementById('boss-btn-html')) return;
+    if (!document.body) {
+        setTimeout(addBossBtn, 50); // Wait until body exists
+        return;
+    }
+    const btn = document.createElement('button');
+    btn.id = 'boss-btn-html';
+    btn.textContent = 'SPAWN BOSS';
+    Object.assign(btn.style, {
+        position: 'absolute',
+        top: '80px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '20px 40px',
+        fontSize: '24px',
+        fontWeight: 'bold',
+        backgroundColor: 'rgba(150, 40, 40, 0.9)',
+        color: '#ffffff',
+        zIndex: '999999',
+        border: '2px solid #ffffff',
+        borderRadius: '8px',
+        cursor: 'pointer'
+    });
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        initAudio();
+        if (!gameStarted) gameStarted = true;
+        spawnDreadnoughtPending = true;
+        dreadnoughtWarningTimer = 180;
+    };
+    document.body.appendChild(btn);
+};
+addBossBtn();
 
 function playSonarPing(type = 'ship') {
     try {
@@ -212,9 +262,48 @@ function playShootSound() {
     }
 }
 
+function playSplashSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        const now = audioCtx.currentTime;
+        const duration = 0.4;
+        
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(800, now);
+        noiseFilter.frequency.exponentialRampToValueAtTime(100, now + duration);
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(0.3, now + 0.05);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        noise.start(now);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
 let score = 0;
 let highScore = parseInt(localStorage.getItem('warshipHighScore')) || 0;
-scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore}`;
+let credits = 0;
+let projSpeedBonus = 0;
+let ammoBonus = 0;
+scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+scoreElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
+radarCountElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
 
 let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
@@ -222,9 +311,14 @@ let time = 0;
 let weaponType = 'single';
 let tripleAmmo = 40;
 let isMenuOpen = false;
+let isUpgradesOpen = false;
 let gameStarted = false;
 let nightVisionEnabled = false;
 let shakeIntensity = 0;
+let dreadnoughtActive = false;
+let nextBossScore = 20; // Trigger the boss naturally every 20 points
+let spawnDreadnoughtPending = true; // Spawn automatically!
+let dreadnoughtWarningTimer = 180;
 
 const turret = {
     x: canvas.width / 2,
@@ -237,6 +331,7 @@ let ships = [];
 let explosions = [];
 let crates = [];
 let clouds = [];
+let splashes = [];
 
 for (let i = 0; i < 6; i++) {
     clouds.push({
@@ -255,7 +350,7 @@ const viewTop = canvas.height / 2 - 300;
 const viewBottom = canvas.height / 2 + 300;
 
 class Projectile {
-    constructor(x, y, angle, speed = 10) {
+    constructor(x, y, angle, speed = 10, targetY = horizonY) {
         this.x = x;
         this.y = y;
         this.vx = Math.cos(angle) * speed;
@@ -265,6 +360,7 @@ class Projectile {
         this.height = 5;
         this.radius = this.width / 2; // For collision
         this.trail = [];
+        this.targetY = targetY; // Track where it should hit the water
     }
 
     update() {
@@ -302,7 +398,7 @@ class Projectile {
     }
 
     isOffScreen() {
-        return this.x < viewLeft || this.x > viewRight || this.y < viewTop || this.y > viewBottom || this.y <= horizonY;
+        return this.x < viewLeft || this.x > viewRight || this.y < viewTop || this.y > viewBottom || this.y <= this.targetY;
     }
 }
 
@@ -311,7 +407,15 @@ class Ship {
         this.x = canvas.width;
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Between horizon and turret
         this.type = type;
-        if (this.type === 'battleship') {
+        if (this.type === 'dreadnought') {
+            this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
+            this.y = horizonY + 30;
+            this.width = 180;
+            this.height = 40;
+            this.speed = 0.4; // Slightly faster so it doesn't feel stalled
+            this.hp = 9; // Takes 9 hits
+            this.maxHp = 9;
+        } else if (this.type === 'battleship') {
             this.width = 70;
             this.height = 25;
             this.speed = Math.random() * 0.8 + 0.4; // Slower speed
@@ -372,7 +476,52 @@ class Ship {
         ctx.fillRect(bowX + this.width * 0.12, bottomY - 3, this.width * 0.88, 3);
         
         // Superstructure and Details
-        if (this.type === 'battleship') {
+        if (this.type === 'dreadnought') {
+            // Main bridge (large, tiered)
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
+            ctx.fillRect(this.x - this.width * 0.15, deckY - 15, this.width * 0.3, 15);
+            ctx.fillRect(this.x - this.width * 0.05, deckY - 25, this.width * 0.15, 10);
+            ctx.fillRect(this.x, deckY - 35, this.width * 0.08, 10);
+
+            // Smokestacks (3 of them)
+            ctx.fillStyle = '#222';
+            ctx.fillRect(this.x + this.width * 0.1, deckY - 25, 8, 20);
+            ctx.fillRect(this.x + this.width * 0.18, deckY - 22, 8, 18);
+            ctx.fillRect(this.x + this.width * 0.26, deckY - 18, 8, 16);
+
+            // Huge Forward Cannons
+            ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+            ctx.fillRect(this.x - this.width * 0.35, deckY - 8, 16, 8); // Turret 1
+            ctx.fillRect(this.x - this.width * 0.35 - 18, deckY - 6, 18, 3); // Barrel 1
+            ctx.fillRect(this.x - this.width * 0.22, deckY - 12, 16, 8); // Turret 2 (Superfiring)
+            ctx.fillRect(this.x - this.width * 0.22 - 18, deckY - 10, 18, 3); // Barrel 2
+
+            // Huge Aft Cannon
+            ctx.fillRect(this.x + this.width * 0.3, deckY - 8, 16, 8); // Turret 3
+            ctx.fillRect(this.x + this.width * 0.3 + 16, deckY - 6, 18, 3); // Barrel 3
+
+            // Masts
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width * 0.02, deckY - 35);
+            ctx.lineTo(this.x + this.width * 0.02, deckY - 50);
+            ctx.moveTo(this.x - this.width * 0.03, deckY - 40);
+            ctx.lineTo(this.x + this.width * 0.07, deckY - 40);
+            ctx.stroke();
+
+            // Draw Boss Health Bar Floating Above
+            const hpWidth = 100;
+            const hpX = this.x - hpWidth / 2;
+            const hpY = deckY - 65;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(hpX, hpY, hpWidth, 8);
+            ctx.fillStyle = '#ff0000'; // Red enemy health
+            ctx.fillRect(hpX, hpY, hpWidth * (this.hp / this.maxHp), 8);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(hpX, hpY, hpWidth, 8);
+        } else if (this.type === 'battleship') {
             // Main bridge
             ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
             ctx.fillRect(this.x - this.width * 0.15, deckY - 12, this.width * 0.3, 12); // Base
@@ -577,6 +726,78 @@ class Explosion {
     }
 }
 
+class Splash {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.circleRadius = 5;
+        this.circleLife = 1.0;
+        this.particles = [];
+        // Spawn a massive geyser of water
+        for (let i = 0; i < 40; i++) {
+            this.particles.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 8, // Wider spread
+                vy: (Math.random() - 1) * 10 - 2, // Huge upward blast
+                size: Math.random() * 6 + 2, // Chunky droplets
+                life: 1.0,
+                decay: Math.random() * 0.03 + 0.01,
+                color: ['rgba(255, 255, 255, 0.9)', 'rgba(180, 220, 255, 0.9)', 'rgba(120, 180, 255, 0.9)'][Math.floor(Math.random() * 3)]
+            });
+        }
+        this.life = 1.0;
+    }
+
+    update() {
+        this.circleRadius += 4; // Fast expanding water ripple
+        this.circleLife -= 0.05; // Fade out
+
+        let maxLife = 0;
+        this.particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.4; // Strong gravity pulls water down
+            p.life -= p.decay;
+            if (p.life > maxLife) maxLife = p.life;
+        });
+        this.life = Math.max(maxLife, this.circleLife);
+    }
+
+    draw() {
+        ctx.save();
+        
+        // Draw a white expanding ripple base on the water
+        if (this.circleLife > 0) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, this.circleLife)})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.circleRadius * 2, this.circleRadius * 0.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, this.circleLife * 0.3)})`;
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.circleRadius * 2, this.circleRadius * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        this.particles.forEach(p => {
+            if (p.life > 0) {
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.life <= 0;
+    }
+}
+
 function updateTurretAngle() {
     const dx = mouseX - turret.x;
     const dy = mouseY - turret.y;
@@ -584,13 +805,14 @@ function updateTurretAngle() {
 }
 
 function shoot() {
+    const targetY = Math.max(mouseY, horizonY); // Cap distance to the horizon at max
     if (weaponType === 'single') {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12)); // Slower speed
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, targetY));
         playShootSound();
     } else if (weaponType === 'triple' && tripleAmmo > 0) {
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8));
-        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, targetY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, targetY));
+        projectiles.push(new Projectile(turret.x, turret.y, turret.angle + 0.15, 8 + projSpeedBonus * 2, targetY));
         playShootSound();
         tripleAmmo--;
         if (tripleAmmo <= 0) {
@@ -600,6 +822,8 @@ function shoot() {
 }
 
 function spawnShip() {
+    if (dreadnoughtActive) return; // Stop spawning normal ships during the boss phase
+    
     if (Math.random() < 0.02) {
         const rand = Math.random();
         let type = 'normal';
@@ -637,11 +861,24 @@ function checkCollisions() {
                 if (ship.hp <= 0) {
                     ships.splice(j, 1);
                     score += 1;
+                    if (ship.type === 'dreadnought') {
+                        dreadnoughtActive = false;
+                        credits += 150; // Boss defeated!
+                    } else {
+                        credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                    }
+                    
+                    if (score >= nextBossScore) {
+                        nextBossScore += 20;
+                        spawnDreadnoughtPending = true;
+                        dreadnoughtWarningTimer = 180; // Show warning for 3 seconds
+                    }
+                    
                     if (score > highScore) {
                         highScore = score;
                         localStorage.setItem('warshipHighScore', highScore);
                     }
-                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore}`;
+                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
                 }
                 hit = true;
                 break;
@@ -661,7 +898,7 @@ function checkCollisions() {
                 playExplosionSound();
                 projectiles.splice(i, 1);
                 crates.splice(k, 1);
-                tripleAmmo += (tripleAmmo <= 30) ? 7 : 2; // Replenish ammo when destroyed
+                tripleAmmo += (tripleAmmo <= 30) ? (7 + ammoBonus * 3) : 2; // Replenish ammo when destroyed
                 break;
             }
         }
@@ -677,8 +914,26 @@ function update() {
         if (shakeIntensity < 0) shakeIntensity = 0;
     }
 
-    projectiles.forEach(proj => proj.update());
-    projectiles = projectiles.filter(proj => !proj.isOffScreen());
+    if (dreadnoughtWarningTimer > 0) {
+        dreadnoughtWarningTimer--;
+    }
+
+    let activeProjectiles = [];
+    projectiles.forEach(proj => {
+        proj.update();
+        if (!proj.isOffScreen()) {
+            activeProjectiles.push(proj);
+        } else if (proj.y <= proj.targetY && proj.x >= viewLeft && proj.x <= viewRight) {
+            let waveY = proj.targetY;
+            if (proj.targetY === horizonY) { // Add natural wave bobbing only if it hit the horizon
+                const horizonOffset = Math.sin(time * 0.8) * 2.4;
+                waveY = horizonY + Math.sin((proj.x * 0.03) + time * 0.8) * 3.2 + Math.cos((proj.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+            }
+            splashes.push(new Splash(proj.x, waveY));
+            playSplashSound();
+        }
+    });
+    projectiles = activeProjectiles;
 
     ships.forEach(ship => ship.update());
     ships = ships.filter(ship => !ship.isOffScreen());
@@ -689,6 +944,9 @@ function update() {
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
 
+    splashes.forEach(splash => splash.update());
+    splashes = splashes.filter(splash => !splash.isDead());
+
     clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
         if (cloud.x < -100) cloud.x = canvas.width + 100;
@@ -697,6 +955,13 @@ function update() {
     spawnShip();
     spawnCrate();
     checkCollisions();
+
+    if (spawnDreadnoughtPending) {
+        ships = []; // Stop all existing ships to make way for the Dreadnought
+        ships.push(new Ship('dreadnought'));
+        dreadnoughtActive = true;
+        spawnDreadnoughtPending = false;
+    }
 
     radarCountElement.textContent = `Ships on Radar: ${ships.length}`;
 }
@@ -840,6 +1105,9 @@ function draw() {
     // Draw explosions
     explosions.forEach(exp => exp.draw());
 
+    // Draw splashes
+    splashes.forEach(splash => splash.draw());
+
     // Apply Night Vision green tint over the periscope
     if (nightVisionEnabled) {
         ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
@@ -899,10 +1167,10 @@ function draw() {
     ctx.stroke();
     ctx.restore();
 
-    // Draw makeshift radar in the bottom-right corner
+    // Draw makeshift radar close to the periscope view
     ctx.save();
-    const radarCX = canvas.width - 100;
-    const radarCY = canvas.height - 120;
+    const radarCX = canvas.width / 2 + 360;
+    const radarCY = canvas.height / 2 + 220;
     const radarRadius = 75;
 
     // Radar background
@@ -982,9 +1250,10 @@ function draw() {
         });
     };
 
-    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat'), '#ff4444', 'ship'); // Red blips for normal ships
+    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought'), '#ff4444', 'ship'); // Red blips for normal ships
     drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
+    drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     ctx.restore();
 
@@ -1000,14 +1269,32 @@ function draw() {
 
     ctx.fillStyle = '#00ff00';
     ctx.font = 'bold 24px monospace';
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(sjTime + ' PT', canvas.width / 2 + 320, canvas.height / 2 - 300);
+    ctx.restore();
+
+    // Draw Score and Credits on the left side of the periscope view
+    ctx.save();
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#00BFFF';
+    ctx.shadowColor = nightVisionEnabled ? '#00ff00' : '#00BFFF';
+    ctx.shadowBlur = 5;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText(sjTime + ' PT', canvas.width - 100, 40);
+    
+    const scoreX = canvas.width / 2 - 330;
+    const scoreY = canvas.height / 2;
+    
+    ctx.fillText(`Sunken Ships: ${score}`, scoreX, scoreY - 30);
+    ctx.fillText(`Best: ${highScore}`, scoreX, scoreY);
+    ctx.fillText(`Credits: $${credits}`, scoreX, scoreY + 30);
+    ctx.fillText(`Ships on Radar: ${ships.length}`, scoreX, scoreY + 60);
     ctx.restore();
 
     // Draw Rank Badge in the right-middle
     ctx.save();
-    const badgeX = canvas.width - 50;
+    const badgeX = canvas.width / 2 + 360;
     const badgeY = canvas.height / 2 - 20;
 
     let rank = "SEAMAN";
@@ -1152,6 +1439,19 @@ function draw() {
     ctx.fillText(rank, badgeX, badgeY + 65);
     ctx.restore();
 
+    // Draw Dreadnought Warning over absolutely everything
+    if (dreadnoughtWarningTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + Math.abs(Math.sin(time * 5)) * 0.5})`;
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 10;
+        ctx.fillText('>> WARNING: DREADNOUGHT DETECTED <<', viewLeft + 20, viewTop + 20);
+        ctx.restore();
+    }
+
     // Draw menu overlay if open
     if (isMenuOpen) {
         ctx.save();
@@ -1159,23 +1459,23 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 125, 300, 250);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 100, 300, 200);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 125, 300, 250);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('MENU', canvas.width / 2, canvas.height / 2 - 50);
+        ctx.fillText('MENU', canvas.width / 2, canvas.height / 2 - 80);
         
         ctx.font = '18px monospace';
-        ctx.fillText('Game Paused', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.fillText('Game Paused', canvas.width / 2, canvas.height / 2 - 50);
 
         // Draw Night Vision Button
         const nvBtnX = canvas.width / 2 - 100;
-        const nvBtnY = canvas.height / 2 + 5;
+        const nvBtnY = canvas.height / 2 - 15;
         const nvBtnW = 200;
         const nvBtnH = 35;
         ctx.fillStyle = nightVisionEnabled ? '#00ff00' : 'rgba(0, 40, 0, 0.8)';
@@ -1186,31 +1486,128 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText(`Night Vision: ${nightVisionEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, nvBtnY + nvBtnH / 2);
         
+        // Draw Upgrades Button
+        const upgMenuBtnY = canvas.height / 2 + 30;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, upgMenuBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, upgMenuBtnY, nvBtnW, nvBtnH);
+        
         ctx.fillStyle = '#00ff00';
-        ctx.font = '14px monospace';
-        ctx.fillText('Click menu icon to resume', canvas.width / 2, canvas.height / 2 + 70);
+        ctx.font = '16px monospace';
+        ctx.fillText('Upgrades', canvas.width / 2, upgMenuBtnY + nvBtnH / 2);
+
+        // Draw Close Menu Button
+        const closeMenuBtnY = canvas.height / 2 + 80;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText('Close Menu', canvas.width / 2, closeMenuBtnY + nvBtnH / 2);
         ctx.restore();
     }
 
-    // Draw hamburger menu button in the bottom-left corner
+    // Draw Upgrades overlay if open
+    if (isUpgradesOpen) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
+        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 200, 500, 400);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 200, 500, 400);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 30px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 150);
+        
+        ctx.font = '20px monospace';
+        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 100);
+
+        // Upgrade 1
+        const u1X = canvas.width / 2 - 200;
+        const u1Y = canvas.height / 2 - 50;
+        ctx.fillStyle = credits >= 50 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u1X, u1Y, 400, 50);
+        ctx.strokeStyle = credits >= 50 ? '#00ff00' : '#888';
+        ctx.strokeRect(u1X, u1Y, 400, 50);
+        ctx.fillStyle = credits >= 50 ? '#00ff00' : '#888';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Faster Torpedoes (+Speed) [$50]`, u1X + 20, u1Y + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText(`Lvl ${projSpeedBonus}`, u1X + 380, u1Y + 25);
+
+        // Upgrade 2
+        const u2X = canvas.width / 2 - 200;
+        const u2Y = canvas.height / 2 + 20;
+        ctx.fillStyle = credits >= 75 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u2X, u2Y, 400, 50);
+        ctx.strokeStyle = credits >= 75 ? '#00ff00' : '#888';
+        ctx.strokeRect(u2X, u2Y, 400, 50);
+        ctx.fillStyle = credits >= 75 ? '#00ff00' : '#888';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Ammo Scavenger (+Ammo) [$75]`, u2X + 20, u2Y + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText(`Lvl ${ammoBonus}`, u2X + 380, u2Y + 25);
+        
+        // Draw Close Upgrades Button
+        const closeUpgBtnY = canvas.height / 2 + 120;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(u2X, closeUpgBtnY, 400, 50);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(u2X, closeUpgBtnY, 400, 50);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('CLOSE UPGRADES', canvas.width / 2, closeUpgBtnY + 25);
+        ctx.restore();
+    }
+
+    // Draw hamburger menu button close to the view
     ctx.save();
+    const menuX = canvas.width / 2 - 490;
+    const menuY = canvas.height / 2 + 180;
+
     ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
-    ctx.fillRect(20, canvas.height - 70, 160, 45);
+    ctx.fillRect(menuX, menuY, 160, 45);
     ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(20, canvas.height - 70, 160, 45);
+    ctx.strokeRect(menuX, menuY, 160, 45);
 
     // Draw 3 horizontal lines for the hamburger icon
     ctx.fillStyle = '#00ff00';
-    ctx.fillRect(30, canvas.height - 60, 24, 4);
-    ctx.fillRect(30, canvas.height - 49, 24, 4);
-    ctx.fillRect(30, canvas.height - 38, 24, 4);
+    ctx.fillRect(menuX + 10, menuY + 10, 24, 4);
+    ctx.fillRect(menuX + 10, menuY + 21, 24, 4);
+    ctx.fillRect(menuX + 10, menuY + 32, 24, 4);
 
     // Add WARSHIP text
     ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('WARSHIP', 65, canvas.height - 47);
+    ctx.fillText('WARSHIP', menuX + 45, menuY + 23);
+    ctx.restore();
+
+    // Draw Upgrades button safely close to the view
+    ctx.save();
+    const upgX = canvas.width / 2 - 490;
+    const upgY = canvas.height / 2 + 235;
+
+    ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+    ctx.fillRect(upgX, upgY, 160, 45);
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(upgX, upgY, 160, 45);
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('UPGRADES (U)', upgX + 80, upgY + 23);
     ctx.restore();
 
     // Draw small targeting crosshair at mouse
@@ -1225,7 +1622,7 @@ function draw() {
 
     // Draw Switch Weapon button
     const btnX = canvas.width / 2 - 70;
-    const btnY = canvas.height - 45; // Anchored to the very bottom edge of the canvas
+    const btnY = canvas.height / 2 + 320; // Anchored right under the view
     const btnWidth = 140;
     const btnHeight = 35;
     
@@ -1259,24 +1656,68 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('click', (e) => {
     initAudio(); // Initialize audio context on first user interaction
-    if (!gameStarted) {
-        gameStarted = true;
-        return;
-    }
 
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
-    // Check if the hamburger menu button was clicked to toggle the menu
-    if (cx >= 20 && cx <= 20 + 160 && cy >= canvas.height - 70 && cy <= canvas.height - 70 + 45) {
-        isMenuOpen = !isMenuOpen;
+    if (!gameStarted) {
+        gameStarted = true;
         return;
+    }
+
+    // Check if the hamburger menu button was clicked to toggle the menu
+    const menuX = canvas.width / 2 - 490;
+    const menuY = canvas.height / 2 + 180;
+    if (cx >= menuX && cx <= menuX + 160 && cy >= menuY && cy <= menuY + 45) {
+        isMenuOpen = !isMenuOpen;
+        if (isMenuOpen) isUpgradesOpen = false; // Close upgrades if menu opens
+        return;
+    }
+
+    // Check if the Upgrades button was clicked
+    const upgX = canvas.width / 2 - 490;
+    const upgY = canvas.height / 2 + 235;
+    if (cx >= upgX && cx <= upgX + 160 && cy >= upgY && cy <= upgY + 45) {
+        isUpgradesOpen = !isUpgradesOpen;
+        if (isUpgradesOpen) isMenuOpen = false; // Close menu if upgrades opens
+        return;
+    }
+
+    if (isUpgradesOpen) {
+        // Check Upgrade 1 click
+        const u1X = canvas.width / 2 - 200;
+        const u1Y = canvas.height / 2 - 50;
+        if (cx >= u1X && cx <= u1X + 400 && cy >= u1Y && cy <= u1Y + 50) {
+            if (credits >= 50) {
+                credits -= 50;
+                projSpeedBonus++;
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
+        }
+        
+        // Check Upgrade 2 click
+        const u2X = canvas.width / 2 - 200;
+        const u2Y = canvas.height / 2 + 20;
+        if (cx >= u2X && cx <= u2X + 400 && cy >= u2Y && cy <= u2Y + 50) {
+            if (credits >= 75) {
+                credits -= 75;
+                ammoBonus++;
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
+        }
+        
+        // Check Close Upgrades click
+        const closeUpgBtnY = canvas.height / 2 + 120;
+        if (cx >= u2X && cx <= u2X + 400 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
+            isUpgradesOpen = false;
+        }
+        return; // Prevent shooting while upgrades menu is open
     }
 
     if (isMenuOpen) {
         const nvBtnX = canvas.width / 2 - 100;
-        const nvBtnY = canvas.height / 2 + 5;
+        const nvBtnY = canvas.height / 2 - 15;
         const nvBtnW = 200;
         const nvBtnH = 35;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= nvBtnY && cy <= nvBtnY + nvBtnH) {
@@ -1293,11 +1734,23 @@ canvas.addEventListener('click', (e) => {
                 radarCountElement.style.textShadow = '0 0 5px #00BFFF';
             }
         }
+        
+        const upMenuBtnY = canvas.height / 2 + 30;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= upMenuBtnY && cy <= upMenuBtnY + nvBtnH) {
+            isUpgradesOpen = true;
+            isMenuOpen = false;
+        }
+        
+        // Check Close Menu click
+        const closeMenuBtnY = canvas.height / 2 + 80;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
+            isMenuOpen = false;
+        }
         return; // Prevent shooting or switching weapons while menu is open
     }
 
     const btnX = canvas.width / 2 - 70;
-    const btnY = canvas.height - 45;
+    const btnY = canvas.height / 2 + 320;
     const btnWidth = 140;
     const btnHeight = 35;
 
@@ -1318,18 +1771,20 @@ function gameLoop() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         ctx.fillStyle = '#00ff00';
-        ctx.font = 'bold 40px monospace';
+        ctx.font = 'bold 50px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 20);
-        ctx.font = '20px monospace';
-        ctx.fillText('CLICK ANYWHERE TO START', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 60);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText('CLICK ANYWHERE TO START', canvas.width / 2, canvas.height / 2 + 40);
         ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
     }
 
-    if (!isMenuOpen) {
+    if (!isMenuOpen && !isUpgradesOpen) {
         update();
     }
     draw();
