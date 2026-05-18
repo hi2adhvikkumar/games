@@ -12,6 +12,8 @@ canvas.width = window.innerWidth || 1200;
 canvas.height = window.innerHeight || 800;
 
 let audioCtx;
+let ambientStarted = false;
+
 function initAudio() {
     try {
         if (!audioCtx) {
@@ -21,8 +23,77 @@ function initAudio() {
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
+        if (!ambientStarted) {
+            startAmbientAudio();
+        }
     } catch (e) {
         console.error("Audio init error:", e);
+    }
+}
+
+function startAmbientAudio() {
+    if (!audioCtx) return;
+    try {
+        ambientStarted = true;
+        const now = audioCtx.currentTime;
+
+        // --- Submarine Engine Hum ---
+        const humOsc = audioCtx.createOscillator();
+        humOsc.type = 'triangle'; 
+        humOsc.frequency.setValueAtTime(65, now); // Raised pitch so it's audible on laptop/monitor speakers
+        const humGain = audioCtx.createGain();
+        humGain.gain.setValueAtTime(0.30, now); // Increased volume
+        humOsc.connect(humGain);
+        humGain.connect(audioCtx.destination);
+        humOsc.start(now);
+
+        // --- Ocean Waves / Wind ---
+        const bufferSize = audioCtx.sampleRate * 2; 
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
+        const noiseSource = audioCtx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+        noiseSource.loop = true;
+
+        // Filter and sweep to simulate rolling waves
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400, now); // Let more high-frequencies through for a "crisper" wave sound
+        
+        const lfoFreq = audioCtx.createOscillator();
+        lfoFreq.type = 'sine';
+        lfoFreq.frequency.setValueAtTime(0.2, now); // One wave every 5 seconds
+        const lfoFreqGain = audioCtx.createGain();
+        lfoFreqGain.gain.setValueAtTime(800, now); // Wider filter sweep
+        
+        const waveGain = audioCtx.createGain();
+        waveGain.gain.setValueAtTime(0.50, now); // Overall wave volume increased
+        
+        const lfoVol = audioCtx.createOscillator();
+        lfoVol.type = 'sine';
+        lfoVol.frequency.setValueAtTime(0.2, now); 
+        const lfoVolGain = audioCtx.createGain();
+        lfoVolGain.gain.setValueAtTime(0.25, now); // Deeper volume swell as waves roll in
+        
+        // Connect the nodes
+        lfoFreq.connect(lfoFreqGain);
+        lfoFreqGain.connect(filter.frequency);
+        lfoVol.connect(lfoVolGain);
+        lfoVolGain.connect(waveGain.gain);
+        
+        noiseSource.connect(filter);
+        filter.connect(waveGain);
+        waveGain.connect(audioCtx.destination);
+
+        noiseSource.start(now);
+        lfoFreq.start(now);
+        lfoVol.start(now);
+
+    } catch (e) {
+        console.error("Ambient audio error:", e);
     }
 }
 
@@ -34,6 +105,12 @@ window.addEventListener('keydown', (e) => {
     initAudio();
     if (!gameStarted) {
         gameStarted = true;
+        // Pre-spawn some ships inside the view so the player doesn't have to wait
+        for (let i = 0; i < 4; i++) {
+            let s = new Ship(Math.random() < 0.3 ? 'battleship' : 'normal');
+            s.x = canvas.width / 2 + (Math.random() * 400) - 200;
+            ships.push(s);
+        }
     }
     // Add keyboard shortcut 'U' to open upgrades
     if (e.key && e.key.toLowerCase() === 'u') {
@@ -455,7 +532,7 @@ class Projectile {
 
 class Ship {
     constructor(type = 'normal') {
-        this.x = canvas.width;
+        this.x = canvas.width / 2 + 350; // Spawn just outside the right edge of the periscope view
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Between horizon and turret
         this.type = type;
         if (this.type === 'dreadnought') {
@@ -644,7 +721,7 @@ class Ship {
 
 class Crate {
     constructor() {
-        this.x = canvas.width;
+        this.x = canvas.width / 2 + 350; // Spawn just outside the right edge of the periscope view
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Same spawn area as ships
         this.width = 24;
         this.height = 16;
@@ -881,7 +958,7 @@ function shoot() {
 function spawnShip() {
     if (dreadnoughtActive) return; // Stop spawning normal ships during the boss phase
     
-    if (Math.random() < 0.02) {
+    if (Math.random() < 0.05) { // Increased spawn rate from 2% to 5% per frame
         const rand = Math.random();
         let type = 'normal';
         if (rand < 0.35) type = 'battleship'; // 35% chance
@@ -1278,6 +1355,7 @@ function draw() {
     // Draw radar blips
     const drawBlips = (items, color, type) => {
         const currentSweep = (time * 2) % (Math.PI * 2);
+        let drawnCount = 0;
         
         items.forEach(item => {
             const dx = item.x - turret.x;
@@ -1286,6 +1364,7 @@ function draw() {
             const radarRange = 450 + (radarBonus * 120); // Radar detects ships further away!
             const scale = radarRadius / radarRange; // Scale world distance down to radar size
             if (dist * scale < radarRadius - 3) {
+                drawnCount++;
                 ctx.fillStyle = color;
                 ctx.beginPath();
                 ctx.arc(radarCX + dx * scale, radarCY + dy * scale, 3, 0, Math.PI * 2);
@@ -1314,13 +1393,15 @@ function draw() {
                 }
             }
         });
+        return drawnCount;
     };
 
-    drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought' && s.type !== 'submarine'), '#ff4444', 'ship'); // Red blips for normal ships
-    drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
-    drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
-    drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
-    drawBlips(ships.filter(s => s.type === 'submarine'), '#00ffff', 'submarine'); // Cyan blips for submarines
+    let visibleShipsCount = 0;
+    visibleShipsCount += drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought' && s.type !== 'submarine'), '#ff4444', 'ship'); // Red blips for normal ships
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ffff', 'submarine'); // Cyan blips for submarines
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     ctx.restore();
 
@@ -1356,7 +1437,7 @@ function draw() {
     ctx.fillText(`Sunken Ships: ${score}`, scoreX, scoreY - 30);
     ctx.fillText(`Best: ${highScore}`, scoreX, scoreY);
     ctx.fillText(`Credits: $${credits}`, scoreX, scoreY + 30);
-    ctx.fillText(`Ships on Radar: ${ships.length}`, scoreX, scoreY + 60);
+    ctx.fillText(`Ships on Radar: ${visibleShipsCount}`, scoreX, scoreY + 60);
     ctx.restore();
 
     // Draw Rank Badge in the right-middle
@@ -1629,16 +1710,17 @@ function draw() {
         // Upgrade 3
         const u3X = canvas.width / 2 - 230;
         const u3Y = canvas.height / 2 + 20;
-        ctx.fillStyle = credits >= 100 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        const canBuyU3 = credits >= 100 && radarBonus < 5;
+        ctx.fillStyle = canBuyU3 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u3X, u3Y, 460, 50);
-        ctx.strokeStyle = credits >= 100 ? '#00ff00' : '#888';
+        ctx.strokeStyle = canBuyU3 ? '#00ff00' : '#888';
         ctx.strokeRect(u3X, u3Y, 460, 50);
-        ctx.fillStyle = credits >= 100 ? '#00ff00' : '#888';
+        ctx.fillStyle = canBuyU3 ? '#00ff00' : '#888';
         ctx.font = '16px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`Advanced Radar (+Range) [$100]`, u3X + 20, u3Y + 25);
+        ctx.fillText(radarBonus >= 5 ? `Advanced Radar (MAX)` : `Advanced Radar (+Range) [$100]`, u3X + 20, u3Y + 25);
         ctx.textAlign = 'right';
-        ctx.fillText(`Lvl ${radarBonus}`, u3X + 440, u3Y + 25);
+        ctx.fillText(radarBonus >= 5 ? `MAX` : `Lvl ${radarBonus}`, u3X + 440, u3Y + 25);
         
         // Upgrade 4
         const u4X = canvas.width / 2 - 230;
@@ -1773,6 +1855,13 @@ canvas.addEventListener('click', (e) => {
         if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
+        } else {
+            // Pre-spawn some ships inside the view so the player doesn't have to wait
+            for (let i = 0; i < 4; i++) {
+                let s = new Ship(Math.random() < 0.3 ? 'battleship' : 'normal');
+                s.x = canvas.width / 2 + (Math.random() * 400) - 200;
+                ships.push(s);
+            }
         }
         gameStarted = true;
         return;
@@ -1823,7 +1912,7 @@ canvas.addEventListener('click', (e) => {
         const u3X = canvas.width / 2 - 230;
         const u3Y = canvas.height / 2 + 20;
         if (cx >= u3X && cx <= u3X + 460 && cy >= u3Y && cy <= u3Y + 50) {
-            if (credits >= 100) {
+            if (credits >= 100 && radarBonus < 5) {
                 credits -= 100;
                 radarBonus++;
                 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
