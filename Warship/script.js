@@ -410,6 +410,7 @@ let projectiles = [];
 let ships = [];
 let explosions = [];
 let crates = [];
+let mines = [];
 let clouds = [];
 let splashes = [];
 
@@ -789,6 +790,58 @@ class Crate {
     }
 }
 
+class Mine {
+    constructor() {
+        this.x = canvas.width / 2 + 350; // Spawn just outside the right edge of the periscope view
+        this.y = horizonY + Math.random() * (turret.y - horizonY); 
+        this.radius = 12;
+        this.speed = Math.random() * 1.0 + 0.3; // Drift speed
+    }
+
+    update() {
+        this.x -= this.speed;
+    }
+
+    draw() {
+        ctx.save();
+        const horizonOffset = Math.sin(time * 0.8) * 2.4;
+        const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
+        ctx.translate(this.x, this.y + bobOffset);
+        
+        // Shadow/Ripple
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, this.radius, this.radius * 1.2, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hull
+        ctx.fillStyle = '#cc0000'; // Bright red
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#660000';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Spikes (Contact horns)
+        ctx.fillStyle = '#555';
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI * 2 / 6) * i + time * 0.5;
+            const sx = Math.cos(angle) * this.radius;
+            const sy = Math.sin(angle) * this.radius;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+
+    isOffScreen() {
+        return this.x + this.radius < 0;
+    }
+}
+
 class Explosion {
     constructor(x, y) {
         this.x = x;
@@ -975,6 +1028,12 @@ function spawnCrate() {
     }
 }
 
+function spawnMine() {
+    if (mines.length < 1 && Math.random() < 0.005) { 
+        mines.push(new Mine());
+    }
+}
+
 function checkCollisions() {
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
@@ -1041,6 +1100,85 @@ function checkCollisions() {
                 if (homingBonus > 0) {
                     homingAmmo += (homingAmmo <= 15) ? (3 + ammoBonus * 1) : 1; // Also replenish homing ammo
                 }
+                hit = true;
+                break;
+            }
+        }
+        
+        if (hit) continue; // Skip checking mines if a crate was hit
+
+        // Check collision with mines
+        for (let m = mines.length - 1; m >= 0; m--) {
+            const mine = mines[m];
+            const dx = proj.x - mine.x;
+            const dy = proj.y - mine.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < proj.radius + mine.radius) {
+                playExplosionSound();
+                shakeIntensity = 15; // Massive screen shake for a mine explosion
+                projectiles.splice(i, 1);
+                
+                // Enormous visual explosion burst
+                for(let e = 0; e < 5; e++) {
+                    explosions.push(new Explosion(mine.x + (Math.random() - 0.5) * 60, mine.y + (Math.random() - 0.5) * 60));
+                }
+                
+                const blastRadius = 2000; // Massive AOE distance to destroy everything in view
+
+                // Destroy ships in AOE
+                for (let s = ships.length - 1; s >= 0; s--) {
+                    const ship = ships[s];
+                    const sdx = ship.x - mine.x;
+                    const sdy = ship.y - mine.y;
+                    const sdist = Math.sqrt(sdx * sdx + sdy * sdy);
+                    if (sdist < blastRadius + ship.width / 2) {
+                        explosions.push(new Explosion(ship.x, ship.y));
+                        ship.hp -= 5; // Mines do massive damage
+                        if (ship.hp <= 0) {
+                            ships.splice(s, 1);
+                            score += 1;
+                            if (ship.type === 'dreadnought') {
+                                dreadnoughtActive = false;
+                                credits += 150;
+                            } else if (ship.type === 'submarine') {
+                                credits += 40;
+                            } else {
+                                credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                            }
+                            
+                            if (score >= nextBossScore) {
+                                nextBossScore += 20;
+                                spawnDreadnoughtPending = true;
+                                dreadnoughtWarningTimer = 180;
+                            }
+                        }
+                    }
+                }
+                
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('warshipHighScore', highScore);
+                }
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                
+                // Destroy crates in AOE
+                for (let c = crates.length - 1; c >= 0; c--) {
+                    const crate = crates[c];
+                    const cdx = crate.x - mine.x;
+                    const cdy = crate.y - mine.y;
+                    const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+                    if (cdist < blastRadius + crate.width / 2) {
+                        explosions.push(new Explosion(crate.x, crate.y));
+                        crates.splice(c, 1);
+                        tripleAmmo += (tripleAmmo <= 30) ? (7 + ammoBonus * 3) : 2;
+                        if (homingBonus > 0) {
+                            homingAmmo += (homingAmmo <= 15) ? (3 + ammoBonus * 1) : 1;
+                        }
+                    }
+                }
+                
+                mines.splice(m, 1);
+                hit = true;
                 break;
             }
         }
@@ -1083,6 +1221,9 @@ function update() {
     crates.forEach(crate => crate.update());
     crates = crates.filter(crate => !crate.isOffScreen());
 
+    mines.forEach(mine => mine.update());
+    mines = mines.filter(mine => !mine.isOffScreen());
+
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
 
@@ -1096,6 +1237,7 @@ function update() {
 
     spawnShip();
     spawnCrate();
+    spawnMine();
     checkCollisions();
 
     if (spawnDreadnoughtPending) {
@@ -1243,6 +1385,9 @@ function draw() {
 
     // Draw crates
     crates.forEach(crate => crate.draw());
+
+    // Draw mines
+    mines.forEach(mine => mine.draw());
 
     // Draw explosions
     explosions.forEach(exp => exp.draw());
@@ -1403,6 +1548,7 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ffff', 'submarine'); // Cyan blips for submarines
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
+    drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
 
     // Draw San Jose (PT) Time in the top-right corner
