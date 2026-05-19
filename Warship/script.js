@@ -394,6 +394,7 @@ let isMenuOpen = false;
 let isUpgradesOpen = false;
 let gameStarted = false;
 let nightVisionEnabled = false;
+let blackAndWhiteEnabled = false;
 let shakeIntensity = 0;
 let dreadnoughtActive = false;
 let nextBossScore = 20; // Trigger the boss naturally every 20 points
@@ -1753,23 +1754,23 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 125, 300, 250);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 125, 300, 250);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('MENU', canvas.width / 2, canvas.height / 2 - 80);
+        ctx.fillText('MENU', canvas.width / 2, canvas.height / 2 - 115);
         
         ctx.font = '18px monospace';
-        ctx.fillText('Game Paused', canvas.width / 2, canvas.height / 2 - 50);
+        ctx.fillText('Game Paused', canvas.width / 2, canvas.height / 2 - 85);
 
         // Draw Night Vision Button
         const nvBtnX = canvas.width / 2 - 100;
-        const nvBtnY = canvas.height / 2 - 15;
+        const nvBtnY = canvas.height / 2 - 60;
         const nvBtnW = 200;
         const nvBtnH = 35;
         ctx.fillStyle = nightVisionEnabled ? '#00ff00' : 'rgba(0, 40, 0, 0.8)';
@@ -1781,7 +1782,7 @@ function draw() {
         ctx.fillText(`Night Vision: ${nightVisionEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, nvBtnY + nvBtnH / 2);
         
         // Draw Upgrades Button
-        const upgMenuBtnY = canvas.height / 2 + 30;
+        const upgMenuBtnY = canvas.height / 2 - 15;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, upgMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -1791,8 +1792,18 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText('Upgrades', canvas.width / 2, upgMenuBtnY + nvBtnH / 2);
 
+        // Draw Black and White Theme Button
+        const bwBtnY = canvas.height / 2 + 30;
+        ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = blackAndWhiteEnabled ? 'black' : '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
+
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 80;
+        const closeMenuBtnY = canvas.height / 2 + 75;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -1901,14 +1912,14 @@ function draw() {
     const menuX = canvas.width / 2 - 490;
     const menuY = canvas.height / 2 + 180;
 
-    ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+    ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
     ctx.fillRect(menuX, menuY, 160, 45);
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.strokeStyle = blackAndWhiteEnabled ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 255, 0, 0.4)';
     ctx.lineWidth = 2;
     ctx.strokeRect(menuX, menuY, 160, 45);
 
     // Draw 3 horizontal lines for the hamburger icon
-    ctx.fillStyle = '#00ff00';
+    ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : '#00ff00';
     ctx.fillRect(menuX + 10, menuY + 10, 24, 4);
     ctx.fillRect(menuX + 10, menuY + 21, 24, 4);
     ctx.fillRect(menuX + 10, menuY + 32, 24, 4);
@@ -1925,12 +1936,12 @@ function draw() {
     const upgX = canvas.width / 2 - 490;
     const upgY = canvas.height / 2 + 235;
 
-    ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+    ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
     ctx.fillRect(upgX, upgY, 160, 45);
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.strokeStyle = blackAndWhiteEnabled ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 255, 0, 0.4)';
     ctx.lineWidth = 2;
     ctx.strokeRect(upgX, upgY, 160, 45);
-    ctx.fillStyle = '#00ff00';
+    ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : '#00ff00';
     ctx.font = 'bold 18px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -2089,9 +2100,9 @@ canvas.addEventListener('click', (e) => {
 
     if (isMenuOpen) {
         const nvBtnX = canvas.width / 2 - 100;
-        const nvBtnY = canvas.height / 2 - 15;
         const nvBtnW = 200;
         const nvBtnH = 35;
+        const nvBtnY = canvas.height / 2 - 60;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= nvBtnY && cy <= nvBtnY + nvBtnH) {
             nightVisionEnabled = !nightVisionEnabled;
             if (nightVisionEnabled) {
@@ -2107,14 +2118,24 @@ canvas.addEventListener('click', (e) => {
             }
         }
         
-        const upMenuBtnY = canvas.height / 2 + 30;
+        const upMenuBtnY = canvas.height / 2 - 15;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= upMenuBtnY && cy <= upMenuBtnY + nvBtnH) {
             isUpgradesOpen = true;
             isMenuOpen = false;
         }
         
+        const bwBtnY = canvas.height / 2 + 30;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= bwBtnY && cy <= bwBtnY + nvBtnH) {
+            blackAndWhiteEnabled = !blackAndWhiteEnabled;
+            canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
+            const bossBtnHtml = document.getElementById('boss-btn-html');
+            if (bossBtnHtml) {
+                bossBtnHtml.style.backgroundColor = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(150, 40, 40, 0.9)';
+            }
+        }
+        
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 80;
+        const closeMenuBtnY = canvas.height / 2 + 75;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }
@@ -2158,7 +2179,7 @@ function gameLoop() {
         const bossBtnX = canvas.width / 2 - bossBtnW / 2;
         const bossBtnY = canvas.height / 2 + 10;
         
-        ctx.fillStyle = 'rgba(200, 0, 0, 0.9)';
+        ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(200, 0, 0, 0.9)';
         ctx.fillRect(bossBtnX, bossBtnY, bossBtnW, bossBtnH);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 3;
