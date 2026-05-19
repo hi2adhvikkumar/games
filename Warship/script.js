@@ -11,6 +11,26 @@ canvas.style.display = 'block';
 canvas.width = window.innerWidth || 1200;
 canvas.height = window.innerHeight || 800;
 
+// Pre-generate frames of static/noise for the Black & White theme to keep performance high
+const noisePatterns = [];
+for (let j = 0; j < 4; j++) {
+    const nCanvas = document.createElement('canvas');
+    nCanvas.width = 128;
+    nCanvas.height = 128;
+    const nCtx = nCanvas.getContext('2d');
+    const imgData = nCtx.createImageData(128, 128);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        const val = Math.random() * 255;
+        data[i] = val;     // Red
+        data[i+1] = val;   // Green
+        data[i+2] = val;   // Blue
+        data[i+3] = 15 + Math.random() * 30; // Alpha (Opacity)
+    }
+    nCtx.putImageData(imgData, 0, 0);
+    noisePatterns.push(ctx.createPattern(nCanvas, 'repeat'));
+}
+
 let audioCtx;
 let ambientStarted = false;
 
@@ -1733,6 +1753,25 @@ function draw() {
     ctx.font = 'bold 14px monospace';
     ctx.fillText(rank, badgeX, badgeY + 65);
     ctx.restore();
+
+    // Apply Black and White Static / Film Grain effect
+    if (blackAndWhiteEnabled) {
+        ctx.save();
+        const patternIdx = Math.floor(Date.now() / 50) % noisePatterns.length; // Rapidly cycle through noise frames
+        ctx.fillStyle = noisePatterns[patternIdx];
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Add occasional vertical scratches (like old film)
+        if (Math.random() < 0.4) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(Math.random() * canvas.width, 0, Math.random() * 3 + 1, canvas.height);
+        }
+        if (Math.random() < 0.2) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(Math.random() * canvas.width, 0, Math.random() * 2 + 1, canvas.height);
+        }
+        ctx.restore();
+    }
 
     // Draw Dreadnought Warning over absolutely everything
     if (dreadnoughtWarningTimer > 0) {
