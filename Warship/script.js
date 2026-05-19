@@ -385,9 +385,9 @@ function playThunderSound() {
         
         const gainNode = audioCtx.createGain();
         gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(1.0, now + 0.1); // Quick strike
-        gainNode.gain.exponentialRampToValueAtTime(0.3, now + 1.0);
-        gainNode.gain.linearRampToValueAtTime(0.5, now + 1.5); // Secondary rumble
+        gainNode.gain.linearRampToValueAtTime(8.0, now + 0.1); // Quick strike (extremely loud)
+        gainNode.gain.exponentialRampToValueAtTime(3.0, now + 1.0); // Sustain (extremely loud)
+        gainNode.gain.linearRampToValueAtTime(4.0, now + 1.5); // Secondary rumble (extremely loud)
         gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration); // Fade away
         
         noise.connect(filter);
