@@ -359,6 +359,47 @@ function playShootSound() {
     }
 }
 
+function playThunderSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 4.0; // Long rumbling echo
+        
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400, now);
+        filter.frequency.linearRampToValueAtTime(100, now + 1.0);
+        filter.frequency.linearRampToValueAtTime(300, now + 2.0);
+        filter.frequency.linearRampToValueAtTime(50, now + duration);
+        
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(1.0, now + 0.1); // Quick strike
+        gainNode.gain.exponentialRampToValueAtTime(0.3, now + 1.0);
+        gainNode.gain.linearRampToValueAtTime(0.5, now + 1.5); // Secondary rumble
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration); // Fade away
+        
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        noise.start(now);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
 function playSplashSound() {
     try {
         if (!audioCtx || audioCtx.state === 'suspended') return;
@@ -434,6 +475,10 @@ let crates = [];
 let mines = [];
 let clouds = [];
 let splashes = [];
+let stormIntensity = 0;
+let targetStormIntensity = 0;
+let lightningFlash = 0;
+let raindrops = [];
 
 for (let i = 0; i < 6; i++) {
     clouds.push({
@@ -1006,6 +1051,31 @@ class Splash {
     }
 }
 
+class Raindrop {
+    constructor() {
+        this.x = Math.random() * (canvas.width + 600) - 300; // Spread out to account for wind angle
+        this.y = viewTop - 50; // Start above periscope view
+        this.length = Math.random() * 30 + 15;
+        this.speed = Math.random() * 20 + 20;
+        this.vx = -Math.random() * 5 - 3; // Slanted left due to storm wind
+    }
+    update() {
+        this.y += this.speed;
+        this.x += this.vx;
+    }
+    draw() {
+        ctx.strokeStyle = `rgba(200, 220, 255, ${0.3 + stormIntensity * 0.2})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.vx, this.y - this.length);
+        ctx.stroke();
+    }
+    isOffScreen() {
+        return this.y > viewBottom + 50;
+    }
+}
+
 function updateTurretAngle() {
     const dx = mouseX - turret.x;
     const dy = mouseY - turret.y;
@@ -1262,6 +1332,38 @@ function update() {
         if (cloud.x < -100) cloud.x = canvas.width + 100;
     });
 
+    // Weather logic
+    if (Math.random() < 0.001) { // 0.1% chance every frame to change weather
+        targetStormIntensity = targetStormIntensity > 0 ? 0.0 : 1.0;
+    }
+    
+    if (stormIntensity < targetStormIntensity) {
+        stormIntensity += 0.002;
+        if (stormIntensity > targetStormIntensity) stormIntensity = targetStormIntensity;
+    } else if (stormIntensity > targetStormIntensity) {
+        stormIntensity -= 0.002;
+        if (stormIntensity < targetStormIntensity) stormIntensity = targetStormIntensity;
+    }
+
+    if (stormIntensity > 0.5 && Math.random() < 0.005) {
+        lightningFlash = 1.0;
+        setTimeout(playThunderSound, Math.random() * 800 + 200); // Light travels faster than sound! Delay the thunder
+    }
+
+    if (lightningFlash > 0) {
+        lightningFlash -= 0.03;
+        if (lightningFlash < 0) lightningFlash = 0;
+    }
+
+    if (stormIntensity > 0) {
+        const rainCount = Math.floor(stormIntensity * 12); // Heavy rain volume
+        for (let i = 0; i < rainCount; i++) { raindrops.push(new Raindrop()); }
+        if (Math.random() < (stormIntensity * 12) % 1) { raindrops.push(new Raindrop()); }
+    }
+
+    raindrops.forEach(drop => drop.update());
+    raindrops = raindrops.filter(drop => !drop.isOffScreen());
+
     spawnShip();
     spawnCrate();
     spawnMine();
@@ -1275,6 +1377,18 @@ function update() {
     }
 
     radarCountElement.textContent = `Ships on Radar: ${ships.length}`;
+}
+
+function lerpColor(c1, c2, factor) {
+    const hex1 = c1.replace('#', '');
+    const hex2 = c2.replace('#', '');
+    const r1 = parseInt(hex1.substring(0,2), 16);
+    const g1 = parseInt(hex1.substring(2,4), 16);
+    const b1 = parseInt(hex1.substring(4,6), 16);
+    const r2 = parseInt(hex2.substring(0,2), 16);
+    const g2 = parseInt(hex2.substring(2,4), 16);
+    const b2 = parseInt(hex2.substring(4,6), 16);
+    return `rgb(${Math.round(r1 + (r2 - r1) * factor)}, ${Math.round(g1 + (g2 - g1) * factor)}, ${Math.round(b1 + (b2 - b1) * factor)})`;
 }
 
 function draw() {
@@ -1296,13 +1410,14 @@ function draw() {
 
     // Draw sky with gradient
     const skyGradient = ctx.createLinearGradient(0, 0, 0, horizonY);
-    skyGradient.addColorStop(0, '#2b5a8c');
-    skyGradient.addColorStop(1, '#87CEEB');
+    skyGradient.addColorStop(0, lerpColor('#2b5a8c', '#1a1a24', stormIntensity));
+    skyGradient.addColorStop(1, lerpColor('#87ceeb', '#4a5a6a', stormIntensity));
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, canvas.width, horizonY);
 
     // Draw drifting clouds
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    const cloudTint = Math.floor(255 - 100 * stormIntensity);
+    ctx.fillStyle = `rgba(${cloudTint}, ${cloudTint}, ${cloudTint}, 0.8)`;
     clouds.forEach(cloud => {
         ctx.save();
         ctx.translate(cloud.x, cloud.y);
@@ -1317,7 +1432,7 @@ function draw() {
     });
 
     // Draw sun
-    ctx.fillStyle = 'rgba(255, 235, 180, 0.9)';
+    ctx.fillStyle = `rgba(255, 235, 180, ${0.9 * (1 - stormIntensity)})`;
     ctx.beginPath();
     ctx.arc(canvas.width * 0.75, horizonY - 45, 25, 0, Math.PI * 2);
     ctx.fill();
@@ -1338,13 +1453,13 @@ function draw() {
     
     // Add depth gradient to the water
     const waterGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height);
-    waterGradient.addColorStop(0, '#1c4d7c'); // Lighter near horizon
-    waterGradient.addColorStop(1, '#001122'); // Darker at the bottom
+    waterGradient.addColorStop(0, lerpColor('#1c4d7c', '#0e263e', stormIntensity)); 
+    waterGradient.addColorStop(1, lerpColor('#001122', '#000408', stormIntensity)); 
     ctx.fillStyle = waterGradient;
     ctx.fill();
     
     // Draw shimmering sun reflection on the water
-    ctx.fillStyle = 'rgba(255, 235, 180, 0.25)';
+    ctx.fillStyle = `rgba(255, 235, 180, ${0.25 * (1 - stormIntensity)})`;
     for (let i = 0; i < 20; i++) {
         const width = 100 - i * 4 + Math.sin(time * 5 + i) * 15;
         const refY = horizonY + 2 + i * 8 + Math.sin(time * 2 + i * 0.5) * 2;
@@ -1421,6 +1536,15 @@ function draw() {
 
     // Draw splashes
     splashes.forEach(splash => splash.draw());
+
+    // Draw rain
+    raindrops.forEach(drop => drop.draw());
+
+    // Draw lightning flash (illuminates the entire periscope view)
+    if (lightningFlash > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${lightningFlash * 0.8})`;
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+    }
 
     // Apply Night Vision green tint over the periscope
     if (nightVisionEnabled) {
