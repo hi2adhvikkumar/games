@@ -589,6 +589,11 @@ class Ship {
     }
 
     draw() {
+        ctx.save();
+        if (this.type === 'submarine') {
+            ctx.globalAlpha = 0.25; // Active camouflage to make them hard to see in the view
+        }
+
         // Calculate bobbing offset to exactly match the ocean horizon waves
         const horizonOffset = Math.sin(time * 0.8) * 2.4;
         const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
@@ -612,7 +617,7 @@ class Ship {
         const bottomY = this.y + bobOffset + this.height / 2;
 
         // Draw Hull with slanted bow
-        ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a'; // Naval grey
+        ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
         ctx.beginPath();
         ctx.moveTo(bowX, deckY); // Tip of bow
         ctx.lineTo(sternX, deckY); // Deck line
@@ -734,6 +739,7 @@ class Ship {
             ctx.lineTo(this.x, deckY - 18);
             ctx.stroke();
         }
+        ctx.restore();
     }
 
     isOffScreen() {
@@ -1567,7 +1573,7 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ffff', 'submarine'); // Cyan blips for submarines
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
