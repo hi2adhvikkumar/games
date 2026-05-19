@@ -479,6 +479,8 @@ let stormIntensity = 0;
 let targetStormIntensity = 0;
 let lightningFlash = 0;
 let raindrops = [];
+let rainMultiplier = 1.0;
+let targetRainMultiplier = 1.0;
 
 for (let i = 0; i < 6; i++) {
     clouds.push({
@@ -1053,11 +1055,11 @@ class Splash {
 
 class Raindrop {
     constructor() {
-        this.x = Math.random() * (canvas.width + 600) - 300; // Spread out to account for wind angle
+        this.x = Math.random() * (canvas.width + 1200) - 400; // Wider spread for harder angles
         this.y = viewTop - 50; // Start above periscope view
         this.length = Math.random() * 30 + 15;
-        this.speed = Math.random() * 20 + 20;
-        this.vx = -Math.random() * 5 - 3; // Slanted left due to storm wind
+        this.speed = Math.random() * 20 + 20 + (rainMultiplier * 5); // Fall faster in heavy squalls
+        this.vx = -Math.random() * 5 - 3 - (rainMultiplier * 3); // Harder slant due to strong storm wind
     }
     update() {
         this.y += this.speed;
@@ -1065,7 +1067,7 @@ class Raindrop {
     }
     draw() {
         ctx.strokeStyle = `rgba(200, 220, 255, ${0.3 + stormIntensity * 0.2})`;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.5 + (rainMultiplier * 0.3); // Thicker drops in heavy rain
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x - this.vx, this.y - this.length);
@@ -1335,6 +1337,12 @@ function update() {
     // Weather logic
     if (Math.random() < 0.001) { // 0.1% chance every frame to change weather
         targetStormIntensity = targetStormIntensity > 0 ? 0.0 : 1.0;
+        targetRainMultiplier = (targetStormIntensity > 0 && Math.random() < 0.3) ? 4.0 : 1.0; // 30% chance for an extreme downpour
+    }
+
+    // Random squalls during an active storm
+    if (targetStormIntensity > 0 && Math.random() < 0.002) {
+        targetRainMultiplier = Math.random() < 0.4 ? 5.0 : 1.0; // Randomly pour extra hard
     }
     
     if (stormIntensity < targetStormIntensity) {
@@ -1343,6 +1351,12 @@ function update() {
     } else if (stormIntensity > targetStormIntensity) {
         stormIntensity -= 0.002;
         if (stormIntensity < targetStormIntensity) stormIntensity = targetStormIntensity;
+    }
+
+    if (rainMultiplier < targetRainMultiplier) {
+        rainMultiplier += 0.02;
+    } else if (rainMultiplier > targetRainMultiplier) {
+        rainMultiplier -= 0.02;
     }
 
     if (stormIntensity > 0.5 && Math.random() < 0.005) {
@@ -1356,9 +1370,10 @@ function update() {
     }
 
     if (stormIntensity > 0) {
-        const rainCount = Math.floor(stormIntensity * 12); // Heavy rain volume
+        const exactRain = stormIntensity * 12 * rainMultiplier;
+        const rainCount = Math.floor(exactRain); // Dynamic rain volume
         for (let i = 0; i < rainCount; i++) { raindrops.push(new Raindrop()); }
-        if (Math.random() < (stormIntensity * 12) % 1) { raindrops.push(new Raindrop()); }
+        if (Math.random() < exactRain % 1) { raindrops.push(new Raindrop()); }
     }
 
     raindrops.forEach(drop => drop.update());
