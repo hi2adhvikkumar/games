@@ -1613,14 +1613,137 @@ function draw() {
     // Draw projectiles (not clipped, so they wrap around the bottom area)
     projectiles.forEach(proj => proj.draw());
 
-    // Draw periscope mask and HUD overlay
+    // Draw periscope mask (Submarine Cockpit) and HUD overlay
     ctx.save();
-    // Black out everything outside the periscope circle
-    ctx.fillStyle = 'black';
+    
+    // Clip to everything outside the periscope circle to draw the cockpit
+    ctx.save();
     ctx.beginPath();
     ctx.rect(-50, -50, canvas.width + 100, canvas.height + 100);
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2, true);
-    ctx.fill();
+    ctx.clip();
+
+    // 1. Metal Panel Background
+    const metalGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    if (nightVisionEnabled) {
+        metalGrad.addColorStop(0, '#002200');
+        metalGrad.addColorStop(1, '#000a00');
+    } else {
+        metalGrad.addColorStop(0, '#3a4245');
+        metalGrad.addColorStop(1, '#1a1e20');
+    }
+    ctx.fillStyle = metalGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Rusty Seams
+    ctx.strokeStyle = nightVisionEnabled ? '#001100' : '#111';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    // Corner diagonal seams
+    ctx.moveTo(0, 0); ctx.lineTo(cx - 250, cy - 250);
+    ctx.moveTo(canvas.width, 0); ctx.lineTo(cx + 250, cy - 250);
+    ctx.moveTo(0, canvas.height); ctx.lineTo(cx - 250, cy + 250);
+    ctx.moveTo(canvas.width, canvas.height); ctx.lineTo(cx + 250, cy + 250);
+    // Framing around periscope
+    ctx.rect(cx - 340, cy - 340, 680, 680);
+    ctx.stroke();
+
+    ctx.strokeStyle = nightVisionEnabled ? '#004400' : '#555'; // Highlight
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 3. Rivets
+    const drawRivet = (rx, ry) => {
+        ctx.fillStyle = nightVisionEnabled ? '#001100' : '#222';
+        ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = nightVisionEnabled ? '#004400' : '#666';
+        ctx.beginPath(); ctx.arc(rx - 1, ry - 1, 2, 0, Math.PI * 2); ctx.fill();
+    };
+
+    // Add rivets around the central box
+    for (let i = -320; i <= 320; i += 80) {
+        drawRivet(cx + i, cy - 320); // Top row
+        drawRivet(cx + i, cy + 320); // Bottom row
+        drawRivet(cx - 320, cy + i); // Left col
+        drawRivet(cx + 320, cy + i); // Right col
+    }
+
+    // 4. Analog Gauges
+    const drawGauge = (gx, gy, radius, label, valueAngle, isCompass) => {
+        ctx.save();
+        ctx.translate(gx, gy);
+        
+        // Outer brass casing
+        const brassGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
+        brassGrad.addColorStop(0, nightVisionEnabled ? '#005500' : '#8a6327');
+        brassGrad.addColorStop(1, nightVisionEnabled ? '#001100' : '#3d2b10');
+        ctx.fillStyle = brassGrad;
+        ctx.beginPath(); ctx.arc(0, 0, radius + 10, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.stroke();
+        
+        // Inner face
+        ctx.fillStyle = nightVisionEnabled ? '#002200' : '#f4ebd0'; // Aged paper
+        ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+        
+        // Inner shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, 0, radius - 2, 0, Math.PI * 2); ctx.stroke();
+        
+        // Ticks
+        ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#222';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 12px sans-serif';
+        for (let i = 0; i < 12; i++) {
+            const ang = (i * Math.PI) / 6;
+            const tx = Math.cos(ang) * (radius - 10);
+            const ty = Math.sin(ang) * (radius - 10);
+            ctx.beginPath(); ctx.arc(tx, ty, 2, 0, Math.PI * 2); ctx.fill();
+        }
+        if (isCompass) {
+            ctx.fillText('N', 0, -radius + 18);
+            ctx.fillText('S', 0, radius - 18);
+            ctx.fillText('E', radius - 18, 0);
+            ctx.fillText('W', -radius + 18, 0);
+        } else {
+            ctx.fillText('MIN', -radius + 22, 0);
+            ctx.fillText('MAX', radius - 22, 0);
+        }
+        
+        // Label
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(label, 0, radius - 35);
+        
+        // Needle
+        ctx.rotate(valueAngle);
+        ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#c00'; // Red needle
+        ctx.beginPath();
+        ctx.moveTo(-3, 0);
+        ctx.lineTo(0, -radius + 10);
+        ctx.lineTo(3, 0);
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Center pin
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+        
+        ctx.restore();
+    };
+
+    // Left Gauge: Engine Pressure (Wiggles dynamically and spikes in storms)
+    const pressureWiggle = (Math.sin(time * 15) * 0.05) + (Math.sin(time * 2.3) * 0.1);
+    const pressureAngle = (stormIntensity > 0 ? Math.PI / 3 : -Math.PI / 3) + pressureWiggle; 
+    drawGauge(cx - 440, cy - 180, 65, "PRESSURE", pressureAngle, false);
+
+    // Right Gauge: Compass (Tied perfectly to your periscope turret angle)
+    const compassAngle = turret.angle + Math.PI / 2;
+    drawGauge(cx + 440, cy - 180, 65, "HEADING", compassAngle, true);
+
+    ctx.restore(); // End cockpit clipping
 
     // Draw periscope green HUD lines
     ctx.strokeStyle = 'rgba(0, 255, 0, 0.25)';
