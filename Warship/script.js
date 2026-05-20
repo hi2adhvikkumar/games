@@ -123,8 +123,10 @@ window.addEventListener('click', () => {
 });
 window.addEventListener('keydown', (e) => {
     initAudio();
+    let justStarted = false;
     if (!gameStarted) {
         gameStarted = true;
+        justStarted = true;
         // Pre-spawn some ships inside the view so the player doesn't have to wait
         for (let i = 0; i < 4; i++) {
             let s = new Ship(Math.random() < 0.3 ? 'battleship' : 'normal');
@@ -141,6 +143,13 @@ window.addEventListener('keydown', (e) => {
     if (e.key && e.key.toLowerCase() === 'b') {
         spawnDreadnoughtPending = true;
         dreadnoughtWarningTimer = 180;
+    }
+    // Spacebar to shoot
+    if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault(); // Prevent the page from scrolling down
+        if (!justStarted && !isMenuOpen && !isUpgradesOpen) {
+            shoot();
+        }
     }
 });
 
