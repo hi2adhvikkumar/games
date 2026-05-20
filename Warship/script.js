@@ -139,10 +139,42 @@ window.addEventListener('keydown', (e) => {
         isUpgradesOpen = !isUpgradesOpen;
         if (isUpgradesOpen) isMenuOpen = false;
     }
-    // Cheat code 'B' to instantly spawn the Boss (Dreadnought)
+    // Add keyboard shortcut 'N' for Night Vision
+    if (e.key && e.key.toLowerCase() === 'n') {
+        nightVisionEnabled = !nightVisionEnabled;
+        if (nightVisionEnabled) {
+            scoreElement.style.color = '#00ff00';
+            scoreElement.style.textShadow = '0 0 5px #00ff00';
+            radarCountElement.style.color = '#00ff00';
+            radarCountElement.style.textShadow = '0 0 5px #00ff00';
+        } else {
+            scoreElement.style.color = '#00BFFF';
+            scoreElement.style.textShadow = '0 0 5px #00BFFF';
+            radarCountElement.style.color = '#00BFFF';
+            radarCountElement.style.textShadow = '0 0 5px #00BFFF';
+        }
+    }
+    // Add keyboard shortcut 'B' for Black and White theme
     if (e.key && e.key.toLowerCase() === 'b') {
+        blackAndWhiteEnabled = !blackAndWhiteEnabled;
+        canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
+        const bossBtnHtml = document.getElementById('boss-btn-html');
+        if (bossBtnHtml) {
+            bossBtnHtml.style.backgroundColor = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(150, 40, 40, 0.9)';
+        }
+    }
+    // Cheat code 'X' to instantly spawn the Boss (Dreadnought)
+    if (e.key && e.key.toLowerCase() === 'x') {
         spawnDreadnoughtPending = true;
         dreadnoughtWarningTimer = 180;
+    }
+    // Keyboard shortcuts 'Escape' or 'P' to pause/open menu
+    if (e.key && (e.key === 'Escape' || e.key.toLowerCase() === 'p')) {
+        if (isUpgradesOpen) {
+            isUpgradesOpen = false; // Close upgrades if it's open
+        } else {
+            isMenuOpen = !isMenuOpen; // Otherwise toggle the pause menu
+        }
     }
     // Spacebar to shoot
     if (e.code === 'Space' || e.key === ' ') {
