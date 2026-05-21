@@ -192,6 +192,14 @@ let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
 
+const interactiveGauges = {
+    pressure: { offset: 0, velocity: 0, isDragging: false },
+    heading: { offset: 0, velocity: 0, isDragging: false },
+    depth: { offset: 0, velocity: 0, isDragging: false },
+    rpm: { offset: 0, velocity: 0, isDragging: false }
+};
+let draggedGauge = null;
+
 for (let i = 0; i < 6; i++) {
     clouds.push({
         x: Math.random() * 800,
@@ -423,6 +431,15 @@ function checkCollisions() {
 function update() {
     updateTurretAngle();
     time += 0.05; // For wave animation
+    
+    // Friction for interactive gauges (keeps them where dragged, allows button spins to slow down)
+    for (let key in interactiveGauges) {
+        let g = interactiveGauges[key];
+        if (!g.isDragging) {
+            g.velocity *= 0.85; // Friction
+            g.offset += g.velocity;
+        }
+    }
     
     if (shakeIntensity > 0) {
         shakeIntensity -= 0.5;
@@ -843,14 +860,64 @@ function draw() {
         ctx.restore();
     };
 
-    // Left Gauge: Engine Pressure (Wiggles dynamically and spikes in storms)
-    const pressureWiggle = (Math.sin(time * 15) * 0.05) + (Math.sin(time * 2.3) * 0.1);
-    const pressureAngle = (stormIntensity > 0 ? Math.PI / 3 : -Math.PI / 3) + pressureWiggle; 
-    drawGauge(cx - 440, cy - 180, 65, "PRESSURE", pressureAngle, false);
+    // Calculate base angles for gauges
+    const basePressureAngle = (stormIntensity > 0 ? Math.PI / 3 : -Math.PI / 3) + ((Math.sin(time * 15) * 0.05) + (Math.sin(time * 2.3) * 0.1));
+    const baseHeadingAngle = turret.angle + Math.PI / 2;
+    const baseDepthAngle = -Math.PI / 4 + Math.sin(time * 0.8) * 0.03;
+    const baseRpmAngle = Math.PI / 4 + (Math.sin(time * 5) * 0.02) + (Math.sin(time * 0.5) * 0.05);
 
-    // Right Gauge: Compass (Tied perfectly to your periscope turret angle)
-    const compassAngle = turret.angle + Math.PI / 2;
-    drawGauge(cx + 440, cy - 180, 65, "HEADING", compassAngle, true);
+    const gaugeCenters = {
+        pressure: { x: cx - 535, y: cy - 220, base: basePressureAngle },
+        heading:  { x: cx + 535, y: cy - 220, base: baseHeadingAngle },
+        depth:    { x: cx - 535, y: cy + 220, base: baseDepthAngle },
+        rpm:      { x: cx + 535, y: cy + 220, base: baseRpmAngle }
+    };
+
+    // Apply Drag offsets
+    if (draggedGauge) {
+        const center = gaugeCenters[draggedGauge];
+        const g = interactiveGauges[draggedGauge];
+        const dx = mouseX - center.x;
+        const dy = mouseY - center.y;
+        const dragAngle = Math.atan2(dy, dx);
+        
+        let angleDiff = dragAngle - center.base;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        g.offset = angleDiff;
+    }
+
+    // Draw Gauges
+    drawGauge(gaugeCenters.pressure.x, gaugeCenters.pressure.y, 65, "PRESSURE", gaugeCenters.pressure.base + interactiveGauges.pressure.offset, false);
+    drawGauge(gaugeCenters.heading.x, gaugeCenters.heading.y, 65, "HEADING", gaugeCenters.heading.base + interactiveGauges.heading.offset, true);
+    drawGauge(gaugeCenters.depth.x, gaugeCenters.depth.y, 65, "DEPTH", gaugeCenters.depth.base + interactiveGauges.depth.offset, false);
+    drawGauge(gaugeCenters.rpm.x, gaugeCenters.rpm.y, 65, "RPM", gaugeCenters.rpm.base + interactiveGauges.rpm.offset, false);
+
+    // Draw interactive buttons beneath gauges
+    const buttonLabels = { pressure: "VENT", heading: "SYNC", depth: "BALLAST", rpm: "START" };
+    for (let key in gaugeCenters) {
+        const center = gaugeCenters[key];
+        const bx = center.x - 40;
+        const by = center.y + 80;
+        
+        ctx.fillStyle = nightVisionEnabled ? '#003300' : '#8a6327';
+        ctx.fillRect(bx, by, 80, 25);
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(bx, by, 80, 5);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(bx, by + 20, 80, 5);
+        
+        ctx.strokeStyle = nightVisionEnabled ? '#00ff00' : '#111';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, 80, 25);
+        
+        ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#111';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(buttonLabels[key], center.x, by + 12.5);
+    }
 
     ctx.restore(); // End cockpit clipping
 
@@ -895,8 +962,8 @@ function draw() {
 
     // Draw makeshift radar close to the periscope view
     ctx.save();
-    const radarCX = canvas.width / 2 + 360;
-    const radarCY = canvas.height / 2 + 220;
+    const radarCX = canvas.width / 2 + 340;
+    const radarCY = canvas.height / 2 + 230;
     const radarRadius = 75 + (radarBonus * 8); // Radar visually grows with upgrade
 
     // Radar background
@@ -1366,14 +1433,14 @@ function draw() {
 
     // Draw hamburger menu button close to the view
     ctx.save();
-    const menuX = canvas.width / 2 - 490;
+    const menuX = canvas.width / 2 - 450;
     const menuY = canvas.height / 2 + 180;
 
     ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
-    ctx.fillRect(menuX, menuY, 160, 45);
+    ctx.fillRect(menuX, menuY, 140, 45);
     ctx.strokeStyle = blackAndWhiteEnabled ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 255, 0, 0.4)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(menuX, menuY, 160, 45);
+    ctx.strokeRect(menuX, menuY, 140, 45);
 
     // Draw 3 horizontal lines for the hamburger icon
     ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : '#00ff00';
@@ -1382,7 +1449,7 @@ function draw() {
     ctx.fillRect(menuX + 10, menuY + 32, 24, 4);
 
     // Add WARSHIP text
-    ctx.font = 'bold 22px monospace';
+    ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText('WARSHIP', menuX + 45, menuY + 23);
@@ -1390,19 +1457,19 @@ function draw() {
 
     // Draw Upgrades button safely close to the view
     ctx.save();
-    const upgX = canvas.width / 2 - 490;
+    const upgX = canvas.width / 2 - 450;
     const upgY = canvas.height / 2 + 235;
 
     ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 40, 0, 0.8)';
-    ctx.fillRect(upgX, upgY, 160, 45);
+    ctx.fillRect(upgX, upgY, 140, 45);
     ctx.strokeStyle = blackAndWhiteEnabled ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 255, 0, 0.4)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(upgX, upgY, 160, 45);
+    ctx.strokeRect(upgX, upgY, 140, 45);
     ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : '#00ff00';
     ctx.font = 'bold 18px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('UPGRADES (U)', upgX + 80, upgY + 23);
+    ctx.fillText('UPGRADES (U)', upgX + 70, upgY + 23);
     ctx.restore();
 
     // Draw small targeting crosshair at mouse
@@ -1453,12 +1520,75 @@ canvas.addEventListener('mousemove', (e) => {
     mouseY = e.clientY - rect.top;
 });
 
+canvas.addEventListener('mousedown', (e) => {
+    initAudio();
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    const cxCenter = canvas.width / 2;
+    const cyCenter = canvas.height / 2;
+    
+    const centers = {
+        pressure: { x: cxCenter - 535, y: cyCenter - 220 },
+        heading:  { x: cxCenter + 535, y: cyCenter - 220 },
+        depth:    { x: cxCenter - 535, y: cyCenter + 220 },
+        rpm:      { x: cxCenter + 535, y: cyCenter + 220 }
+    };
+    
+    // Check if the user is grabbing a gauge
+    for (let key in centers) {
+        const dx = clickX - centers[key].x;
+        const dy = clickY - centers[key].y;
+        if (Math.sqrt(dx * dx + dy * dy) <= 65) {
+            draggedGauge = key;
+            interactiveGauges[key].isDragging = true;
+            interactiveGauges[key].velocity = 0;
+            return;
+        }
+    }
+});
+
+window.addEventListener('mouseup', () => {
+    if (draggedGauge) {
+        interactiveGauges[draggedGauge].isDragging = false;
+        draggedGauge = null;
+    }
+});
+
 canvas.addEventListener('click', (e) => {
     initAudio(); // Initialize audio context on first user interaction
 
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
+
+    // Check if clicked on a gauge (tap the glass effect)
+    const cxCenter = canvas.width / 2;
+    const cyCenter = canvas.height / 2;
+    const gaugeCenters = {
+        pressure: { x: cxCenter - 535, y: cyCenter - 220 },
+        heading:  { x: cxCenter + 535, y: cyCenter - 220 },
+        depth:    { x: cxCenter - 535, y: cyCenter + 220 },
+        rpm:      { x: cxCenter + 535, y: cyCenter + 220 }
+    };
+    for (let key in gaugeCenters) {
+        const dx = cx - gaugeCenters[key].x;
+        const dy = cy - gaugeCenters[key].y;
+        if (Math.sqrt(dx * dx + dy * dy) <= 65) {
+            interactiveGauges[key].velocity = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 0.5 + 0.5);
+            playSonarPing('ship'); // Small metallic "tink" sound
+            return;
+        }
+        
+        // Check if gauge button was clicked
+        const bx = gaugeCenters[key].x - 40;
+        const by = gaugeCenters[key].y + 80;
+        if (cx >= bx && cx <= bx + 80 && cy >= by && cy <= by + 25) {
+            interactiveGauges[key].velocity = 2.0; // Give the needle a big jump
+            playSonarPing('submarine'); // A slightly different mechanical sound
+            return;
+        }
+    }
 
     if (!gameStarted) {
         const bossBtnW = 280;
@@ -1482,18 +1612,18 @@ canvas.addEventListener('click', (e) => {
     }
 
     // Check if the hamburger menu button was clicked to toggle the menu
-    const menuX = canvas.width / 2 - 490;
+    const menuX = canvas.width / 2 - 450;
     const menuY = canvas.height / 2 + 180;
-    if (cx >= menuX && cx <= menuX + 160 && cy >= menuY && cy <= menuY + 45) {
+    if (cx >= menuX && cx <= menuX + 140 && cy >= menuY && cy <= menuY + 45) {
         isMenuOpen = !isMenuOpen;
         if (isMenuOpen) isUpgradesOpen = false; // Close upgrades if menu opens
         return;
     }
 
     // Check if the Upgrades button was clicked
-    const upgX = canvas.width / 2 - 490;
+    const upgX = canvas.width / 2 - 450;
     const upgY = canvas.height / 2 + 235;
-    if (cx >= upgX && cx <= upgX + 160 && cy >= upgY && cy <= upgY + 45) {
+    if (cx >= upgX && cx <= upgX + 140 && cy >= upgY && cy <= upgY + 45) {
         isUpgradesOpen = !isUpgradesOpen;
         if (isUpgradesOpen) isMenuOpen = false; // Close menu if upgrades opens
         return;
