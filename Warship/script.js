@@ -767,26 +767,29 @@ function draw() {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // --- Concentric Circular Bulkhead Background ---
-    ctx.save();
-    ctx.translate(cx, cy);
+    // --- Uneven Scrap Metal Panels ---
     ctx.beginPath();
+    let currentY = -100;
+    let rowIndex = 0;
     
-    const maxDim = Math.max(canvas.width, canvas.height) * 1.5; 
-    
-    // Draw staggered circular metal panels radiating outward
-    for (let r = 340; r <= maxDim; r += 140) { 
-        ctx.moveTo(r, 0);
-        ctx.arc(0, 0, r, 0, Math.PI * 2); 
+    while (currentY < canvas.height + 200) {
+        let rowHeight = 90 + Math.abs(Math.sin(rowIndex * 7.4)) * 140; // Height varies between 90 and 230
         
-        const numPanels = 8 + Math.floor(r / 100);
-        const offset = (r % 280 === 0) ? 0 : Math.PI / numPanels; // Stagger like bricks
+        ctx.moveTo(0, currentY);
+        ctx.lineTo(canvas.width, currentY);
         
-        for(let i = 0; i < numPanels; i++) {
-            const a = offset + (i * Math.PI * 2 / numPanels);
-            ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-            ctx.lineTo(Math.cos(a) * (r + 140), Math.sin(a) * (r + 140));
+        let currentX = -100;
+        let colIndex = 0;
+        while (currentX < canvas.width + 200) {
+            let panelWidth = 120 + Math.abs(Math.cos(rowIndex * 3.2 + colIndex * 5.1)) * 280; // Width varies between 120 and 400
+            
+            ctx.moveTo(currentX, currentY);
+            ctx.lineTo(currentX, currentY + rowHeight);
+            currentX += panelWidth;
+            colIndex++;
         }
+        currentY += rowHeight;
+        rowIndex++;
     }
     ctx.stroke();
 
@@ -798,30 +801,32 @@ function draw() {
         ctx.beginPath(); ctx.arc(rx - 1, ry - 1, 2, 0, Math.PI * 2); ctx.fill();
     };
 
-    // Draw rivets along the circular seams and radial ribs
-    for (let r = 340; r <= maxDim; r += 140) { 
-        const numPanels = 8 + Math.floor(r / 100);
-        const offset = (r % 280 === 0) ? 0 : Math.PI / numPanels;
+    // Draw rivets along the uneven seams
+    currentY = -100;
+    rowIndex = 0;
+    while (currentY < canvas.height + 200) {
+        let rowHeight = 90 + Math.abs(Math.sin(rowIndex * 7.4)) * 140;
         
-        // Rivets hugging the circular rings
-        const rivetsPerRing = numPanels * 5;
-        for (let i = 0; i < rivetsPerRing; i++) {
-            const a = offset + (i * Math.PI * 2 / rivetsPerRing);
-            drawRivet(Math.cos(a) * (r - 15), Math.sin(a) * (r - 15));
-            drawRivet(Math.cos(a) * (r + 15), Math.sin(a) * (r + 15));
-        }
-        
-        // Rivets hugging the radial dividing ribs
-        for(let i = 0; i < numPanels; i++) {
-            const a = offset + (i * Math.PI * 2 / numPanels);
-            for (let dr = 35; dr < 120; dr += 35) {
-                const angleOffset = 15 / (r + dr); // 15 pixels of arc length
-                drawRivet(Math.cos(a - angleOffset) * (r + dr), Math.sin(a - angleOffset) * (r + dr));
-                drawRivet(Math.cos(a + angleOffset) * (r + dr), Math.sin(a + angleOffset) * (r + dr));
+        let currentX = -100;
+        let colIndex = 0;
+        while (currentX < canvas.width + 200) {
+            let panelWidth = 120 + Math.abs(Math.cos(rowIndex * 3.2 + colIndex * 5.1)) * 280;
+            
+            for (let dx = 30; dx < panelWidth - 10; dx += 50) {
+                drawRivet(currentX + dx, currentY - 15);
+                drawRivet(currentX + dx, currentY + 15);
             }
+            for (let dy = 30; dy < rowHeight - 10; dy += 50) {
+                drawRivet(currentX - 15, currentY + dy);
+                drawRivet(currentX + 15, currentY + dy);
+            }
+            
+            currentX += panelWidth;
+            colIndex++;
         }
+        currentY += rowHeight;
+        rowIndex++;
     }
-    ctx.restore();
 
     // --- Non-rotated Framing & Corner Seams ---
     ctx.beginPath();
