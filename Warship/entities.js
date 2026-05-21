@@ -188,8 +188,18 @@ class Ship {
             // Smokestacks (3 of them)
             ctx.fillStyle = '#222';
             ctx.fillRect(this.x + this.width * 0.1, deckY - 25, 8, 20);
-            ctx.fillRect(this.x + this.width * 0.18, deckY - 22, 8, 18);
-            ctx.fillRect(this.x + this.width * 0.26, deckY - 18, 8, 16);
+            
+            if (this.hp > 3) {
+                ctx.fillRect(this.x + this.width * 0.18, deckY - 22, 8, 18);
+            } else {
+                ctx.fillRect(this.x + this.width * 0.18, deckY - 10, 8, 6); // Broken middle stack
+            }
+
+            if (this.hp > 6) {
+                ctx.fillRect(this.x + this.width * 0.26, deckY - 18, 8, 16);
+            } else {
+                ctx.fillRect(this.x + this.width * 0.26, deckY - 8, 8, 6); // Broken rear stack
+            }
 
             // Huge Forward Cannons
             ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
@@ -223,6 +233,45 @@ class Ship {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.strokeRect(hpX, hpY, hpWidth, 8);
+
+            // Draw Damage Effects (Fire and Smoke)
+            if (this.hp <= 6) {
+                // Heavy black smoke from broken rear stack
+                ctx.fillStyle = `rgba(30, 30, 30, 0.7)`;
+                ctx.beginPath();
+                ctx.arc(this.x + this.width * 0.26 + 4 + Math.sin(time * 2) * 2, deckY - 15, 8, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.26 + 15 + Math.sin(time * 2 + 1) * 5, deckY - 30, 15, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.26 + 30 + Math.sin(time * 2 + 2) * 8, deckY - 45, 20, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            if (this.hp <= 3) {
+                // Heavy black smoke from broken middle stack
+                ctx.fillStyle = `rgba(30, 30, 30, 0.8)`;
+                ctx.beginPath();
+                ctx.arc(this.x + this.width * 0.18 + 4 + Math.sin(time * 3) * 2, deckY - 20, 10, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.18 + 20 + Math.sin(time * 3 + 1) * 5, deckY - 40, 18, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.18 + 40 + Math.sin(time * 3 + 2) * 8, deckY - 60, 25, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Raging fire on the deck / bridge
+                ctx.fillStyle = `rgba(255, ${Math.floor(50 + Math.random() * 100)}, 0, 0.9)`;
+                ctx.beginPath();
+                ctx.moveTo(this.x - 15, deckY);
+                ctx.lineTo(this.x - 5, deckY - 20 - Math.random() * 15);
+                ctx.lineTo(this.x + 5, deckY - 5);
+                ctx.lineTo(this.x + 15, deckY - 25 - Math.random() * 20);
+                ctx.lineTo(this.x + 25, deckY);
+                ctx.fill();
+
+                // Inner brighter fire
+                ctx.fillStyle = `rgba(255, 200, 0, 0.9)`;
+                ctx.beginPath();
+                ctx.moveTo(this.x - 5, deckY);
+                ctx.lineTo(this.x, deckY - 10 - Math.random() * 10);
+                ctx.lineTo(this.x + 10, deckY - 15 - Math.random() * 15);
+                ctx.lineTo(this.x + 15, deckY);
+                ctx.fill();
+            }
         } else if (this.type === 'battleship') {
             // Main bridge
             ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
