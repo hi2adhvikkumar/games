@@ -185,6 +185,15 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+window.addEventListener('wheel', (e) => {
+    if (!gameStarted || isMenuOpen || isUpgradesOpen) return;
+    // Scroll up to zoom in, scroll down to zoom out
+    if (e.deltaY < 0) zoomLevel += 0.15;
+    else if (e.deltaY > 0) zoomLevel -= 0.15;
+    if (zoomLevel < 1.0) zoomLevel = 1.0;
+    if (zoomLevel > 3.0) zoomLevel = 3.0; // Limit maximum zoom
+});
+
 const addBossBtn = () => {
     if (document.getElementById('boss-btn-html')) return;
     if (!document.body) {
@@ -522,6 +531,7 @@ let lightningFlash = 0;
 let raindrops = [];
 let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
+let zoomLevel = 1.0;
 
 for (let i = 0; i < 6; i++) {
     clouds.push({
@@ -1120,8 +1130,14 @@ class Raindrop {
 }
 
 function updateTurretAngle() {
-    const dx = mouseX - turret.x;
-    const dy = mouseY - turret.y;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    // Inverse transform the mouse coordinates back to the world space accounting for zoom
+    const worldMouseX = (mouseX - cx) / zoomLevel + cx;
+    const worldMouseY = (mouseY - cy) / zoomLevel + cy;
+    
+    const dx = worldMouseX - turret.x;
+    const dy = worldMouseY - turret.y;
     turret.angle = Math.atan2(dy, dx);
 }
 
@@ -1464,6 +1480,12 @@ function draw() {
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.clip();
 
+    // Apply Zoom to the World View
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(zoomLevel, zoomLevel);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
     // Draw sky with gradient
     const skyGradient = ctx.createLinearGradient(0, 0, 0, horizonY);
     skyGradient.addColorStop(0, lerpColor('#2b5a8c', '#1a1a24', stormIntensity));
@@ -1608,7 +1630,15 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
 
+    ctx.restore(); // Restore from World Zoom
+
     ctx.restore();
+
+    // Apply Zoom to projectiles
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(zoomLevel, zoomLevel);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
     // Draw projectiles (not clipped, so they wrap around the bottom area)
     projectiles.forEach(proj => proj.draw());
