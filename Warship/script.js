@@ -192,6 +192,13 @@ let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
 
+let stickyNoteState = 0;
+const stickyMessages = [
+    "CHEAT:\nPRESS 'X' TO\nSPAWN BOSS",
+    "NOTE:\nWE ARE OUT\nOF COFFEE!!",
+    "WASH YOUR\nCOFFEE MUG!!"
+];
+
 const interactiveGauges = {
     pressure: { offset: 0, velocity: 0, isDragging: false },
     heading: { offset: 0, velocity: 0, isDragging: false },
@@ -964,6 +971,34 @@ function draw() {
         ctx.textBaseline = 'middle';
         ctx.fillText(buttonLabels[key], center.x, by + 12.5);
     }
+    
+    // Draw Interactive Sticky Note
+    const stickyX = cx + 430;
+    const stickyY = cy - 40;
+    ctx.save();
+    ctx.translate(stickyX, stickyY);
+    ctx.rotate(0.1); // Slight casual tilt
+    
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(3, 3, 100, 100);
+    
+    // Paper
+    ctx.fillStyle = nightVisionEnabled ? '#003300' : '#fff466'; // Yellowish post-it
+    ctx.fillRect(0, 0, 100, 100);
+    
+    // Scotch Tape
+    ctx.fillStyle = nightVisionEnabled ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 255, 255, 0.5)';
+    ctx.rotate(-0.15);
+    ctx.fillRect(30, -10, 40, 20);
+    ctx.rotate(0.15);
+    
+    // Note Text
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#111';
+    ctx.font = 'bold 12px "Comic Sans MS", cursive, sans-serif'; // Handwritten look
+    const lines = stickyMessages[stickyNoteState].split('\n');
+    for (let i = 0; i < lines.length; i++) { ctx.fillText(lines[i], 50, 35 + i * 18); }
+    ctx.restore();
 
     ctx.restore(); // End cockpit clipping
 
@@ -1634,6 +1669,15 @@ canvas.addEventListener('click', (e) => {
             playSonarPing('submarine'); // A slightly different mechanical sound
             return;
         }
+    }
+    
+    // Check if Sticky Note was clicked
+    const stickyX = cxCenter + 430;
+    const stickyY = cyCenter - 40;
+    if (cx >= stickyX && cx <= stickyX + 100 && cy >= stickyY && cy <= stickyY + 100) {
+        stickyNoteState = (stickyNoteState + 1) % stickyMessages.length;
+        playSonarPing('ship'); // Light tap sound
+        return;
     }
 
     if (!gameStarted) {
