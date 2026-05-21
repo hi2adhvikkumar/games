@@ -764,10 +764,67 @@ function draw() {
     // 2. Rusty Seams
     ctx.strokeStyle = nightVisionEnabled ? '#001100' : '#111';
     ctx.lineWidth = 6;
-    ctx.beginPath();
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-    // Corner diagonal seams
+
+    // --- Concentric Circular Bulkhead Background ---
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    
+    const maxDim = Math.max(canvas.width, canvas.height) * 1.5; 
+    
+    // Draw staggered circular metal panels radiating outward
+    for (let r = 340; r <= maxDim; r += 140) { 
+        ctx.moveTo(r, 0);
+        ctx.arc(0, 0, r, 0, Math.PI * 2); 
+        
+        const numPanels = 8 + Math.floor(r / 100);
+        const offset = (r % 280 === 0) ? 0 : Math.PI / numPanels; // Stagger like bricks
+        
+        for(let i = 0; i < numPanels; i++) {
+            const a = offset + (i * Math.PI * 2 / numPanels);
+            ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+            ctx.lineTo(Math.cos(a) * (r + 140), Math.sin(a) * (r + 140));
+        }
+    }
+    ctx.stroke();
+
+    // 3. Rivets
+    const drawRivet = (rx, ry) => {
+        ctx.fillStyle = nightVisionEnabled ? '#001100' : '#222';
+        ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = nightVisionEnabled ? '#004400' : '#666';
+        ctx.beginPath(); ctx.arc(rx - 1, ry - 1, 2, 0, Math.PI * 2); ctx.fill();
+    };
+
+    // Draw rivets along the circular seams and radial ribs
+    for (let r = 340; r <= maxDim; r += 140) { 
+        const numPanels = 8 + Math.floor(r / 100);
+        const offset = (r % 280 === 0) ? 0 : Math.PI / numPanels;
+        
+        // Rivets hugging the circular rings
+        const rivetsPerRing = numPanels * 5;
+        for (let i = 0; i < rivetsPerRing; i++) {
+            const a = offset + (i * Math.PI * 2 / rivetsPerRing);
+            drawRivet(Math.cos(a) * (r - 15), Math.sin(a) * (r - 15));
+            drawRivet(Math.cos(a) * (r + 15), Math.sin(a) * (r + 15));
+        }
+        
+        // Rivets hugging the radial dividing ribs
+        for(let i = 0; i < numPanels; i++) {
+            const a = offset + (i * Math.PI * 2 / numPanels);
+            for (let dr = 35; dr < 120; dr += 35) {
+                const angleOffset = 15 / (r + dr); // 15 pixels of arc length
+                drawRivet(Math.cos(a - angleOffset) * (r + dr), Math.sin(a - angleOffset) * (r + dr));
+                drawRivet(Math.cos(a + angleOffset) * (r + dr), Math.sin(a + angleOffset) * (r + dr));
+            }
+        }
+    }
+    ctx.restore();
+
+    // --- Non-rotated Framing & Corner Seams ---
+    ctx.beginPath();
     ctx.moveTo(0, 0); ctx.lineTo(cx - 250, cy - 250);
     ctx.moveTo(canvas.width, 0); ctx.lineTo(cx + 250, cy - 250);
     ctx.moveTo(0, canvas.height); ctx.lineTo(cx - 250, cy + 250);
@@ -779,22 +836,6 @@ function draw() {
     ctx.strokeStyle = nightVisionEnabled ? '#004400' : '#555'; // Highlight
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    // 3. Rivets
-    const drawRivet = (rx, ry) => {
-        ctx.fillStyle = nightVisionEnabled ? '#001100' : '#222';
-        ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = nightVisionEnabled ? '#004400' : '#666';
-        ctx.beginPath(); ctx.arc(rx - 1, ry - 1, 2, 0, Math.PI * 2); ctx.fill();
-    };
-
-    // Add rivets around the central box
-    for (let i = -320; i <= 320; i += 80) {
-        drawRivet(cx + i, cy - 320); // Top row
-        drawRivet(cx + i, cy + 320); // Bottom row
-        drawRivet(cx - 320, cy + i); // Left col
-        drawRivet(cx + 320, cy + i); // Right col
-    }
 
     // 4. Analog Gauges
     const drawGauge = (gx, gy, radius, label, valueAngle, isCompass) => {
