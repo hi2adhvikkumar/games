@@ -184,6 +184,7 @@ let crates = [];
 let mines = [];
 let clouds = [];
 let splashes = [];
+let glassCracks = [];
 let stormIntensity = 0;
 let targetStormIntensity = 0;
 let lightningFlash = 0;
@@ -371,6 +372,50 @@ function checkCollisions() {
                 // Enormous visual explosion burst
                 for(let e = 0; e < 5; e++) {
                     explosions.push(new Explosion(mine.x + (Math.random() - 0.5) * 60, mine.y + (Math.random() - 0.5) * 60));
+                }
+
+                // --- Cracked Glass Mechanic ---
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2;
+                const distToCenter = Math.sqrt(Math.pow(mine.x - cx, 2) + Math.pow(mine.y - cy, 2));
+                
+                // If the explosion is close enough to the periscope lens, crack it!
+                if (distToCenter < 380) {
+                    const screenX = (mine.x - cx) * zoomLevel + cx;
+                    const screenY = (mine.y - cy) * zoomLevel + cy;
+                    
+                    let crackLines = [];
+                    let concentricRings = [];
+                    const numRays = 5 + Math.floor(Math.random() * 5); // Spiderweb rays
+                    
+                    for (let r = 0; r < numRays; r++) {
+                        let angle = (r / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                        let length = 80 + Math.random() * 220; // Length of the crack
+                        let segments = [];
+                        let curX = screenX, curY = screenY;
+                        
+                        // Make the ray jagged
+                        for (let j = 0; j < 5; j++) {
+                            let segLen = length / 5;
+                            let segAngle = angle + (Math.random() - 0.5) * 0.5;
+                            curX += Math.cos(segAngle) * segLen;
+                            curY += Math.sin(segAngle) * segLen;
+                            segments.push({ x: curX, y: curY });
+                        }
+                        crackLines.push(segments);
+                        
+                        // Connect this ray to the next one to create concentric spiderweb breaks
+                        if (Math.random() > 0.3) {
+                            let nextR = (r + 1) % numRays;
+                            let ringRadius = 30 + Math.random() * 80;
+                            let p1x = screenX + Math.cos((r / numRays) * Math.PI * 2) * ringRadius;
+                            let p1y = screenY + Math.sin((r / numRays) * Math.PI * 2) * ringRadius;
+                            let p2x = screenX + Math.cos((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
+                            let p2y = screenY + Math.sin((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
+                            concentricRings.push({ x1: p1x, y1: p1y, x2: p2x, y2: p2y });
+                        }
+                    }
+                    glassCracks.push({ x: screenX, y: screenY, lines: crackLines, rings: concentricRings });
                 }
                 
                 const blastRadius = 2000; // Massive AOE distance to destroy everything in view
@@ -1039,6 +1084,48 @@ function draw() {
     ctx.beginPath();
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.stroke();
+
+    // --- Draw Cracked Glass Overlay ---
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+    ctx.clip(); // Keep the glass cracks strictly inside the periscope lens
+
+    glassCracks.forEach(crack => {
+        ctx.save();
+        
+        const drawCrackPaths = (offsetX, offsetY) => {
+            crack.lines.forEach(segments => {
+                ctx.beginPath();
+                ctx.moveTo(crack.x + offsetX, crack.y + offsetY);
+                segments.forEach(seg => ctx.lineTo(seg.x + offsetX, seg.y + offsetY));
+                ctx.stroke();
+            });
+            crack.rings.forEach(ring => {
+                ctx.beginPath();
+                ctx.moveTo(ring.x1 + offsetX, ring.y1 + offsetY);
+                ctx.lineTo(ring.x2 + offsetX, ring.y2 + offsetY);
+                ctx.stroke();
+            });
+        };
+        
+        // Inner drop shadow for 3D thickness
+        ctx.strokeStyle = nightVisionEnabled ? 'rgba(0, 50, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = 2.5;
+        drawCrackPaths(1, 1);
+        
+        // White/Light highlight for the broken glass edges
+        ctx.strokeStyle = nightVisionEnabled ? 'rgba(150, 255, 150, 0.9)' : 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1;
+        drawCrackPaths(0, 0);
+        
+        // Center shatter impact point
+        ctx.fillStyle = nightVisionEnabled ? 'rgba(150, 255, 150, 0.9)' : 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath(); ctx.arc(crack.x, crack.y, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    });
+    ctx.restore();
+
     ctx.restore();
 
     // Draw makeshift radar close to the periscope view
