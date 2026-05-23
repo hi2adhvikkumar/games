@@ -338,3 +338,56 @@ function playSplashSound() {
         console.error("Audio error:", e);
     }
 }
+
+function playMassiveExplosionSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 4.0; // Very long thunderous rumble
+
+        // Deep sub-bass boom
+        const oscBoom = audioCtx.createOscillator();
+        const gainBoom = audioCtx.createGain();
+        oscBoom.type = 'sine';
+        oscBoom.frequency.setValueAtTime(100, now);
+        oscBoom.frequency.exponentialRampToValueAtTime(10, now + duration);
+        
+        gainBoom.gain.setValueAtTime(0, now);
+        gainBoom.gain.linearRampToValueAtTime(2.5, now + 0.1); // Super loud attack
+        gainBoom.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        oscBoom.connect(gainBoom);
+        gainBoom.connect(audioCtx.destination);
+        
+        oscBoom.start(now);
+        oscBoom.stop(now + duration);
+
+        // Enormous white noise explosion blast
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) { data[i] = (Math.random() * 2 - 1) * 0.9; }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(1500, now);
+        noiseFilter.frequency.exponentialRampToValueAtTime(30, now + duration);
+        
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(2.0, now + 0.05);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+        
+        noise.start(now);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}

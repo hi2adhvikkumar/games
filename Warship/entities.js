@@ -545,22 +545,24 @@ class Mine {
 }
 
 class Explosion {
-    constructor(x, y) {
+    constructor(x, y, isMassive = false) {
         this.x = x;
         this.y = y;
-        this.circleRadius = 5;
+        this.isMassive = isMassive;
+        this.circleRadius = isMassive ? 20 : 5;
         this.circleLife = 1.0;
         this.particles = [];
-        // Spawn 20 small particles for the explosion burst
-        for (let i = 0; i < 20; i++) {
+        
+        const particleCount = isMassive ? 150 : 20; // Spawn way more particles if massive!
+        for (let i = 0; i < particleCount; i++) {
             this.particles.push({
                 x: x,
                 y: y,
-                vx: (Math.random() - 0.5) * 6,
-                vy: (Math.random() - 0.5) * 6,
-                size: Math.random() * 4 + 1,
+                vx: (Math.random() - 0.5) * (isMassive ? 25 : 6),
+                vy: (Math.random() - 0.5) * (isMassive ? 25 : 6),
+                size: Math.random() * (isMassive ? 10 : 4) + (isMassive ? 4 : 1),
                 life: 1.0,
-                decay: Math.random() * 0.05 + 0.03,
+                decay: Math.random() * (isMassive ? 0.015 : 0.05) + (isMassive ? 0.01 : 0.03),
                 color: ['#ff0000', '#ff8800', '#ffff00', '#ffffff'][Math.floor(Math.random() * 4)]
             });
         }
@@ -568,8 +570,8 @@ class Explosion {
     }
 
     update() {
-        this.circleRadius += 3; // Grow the flash
-        this.circleLife -= 0.1; // Fade the flash quickly
+        this.circleRadius += this.isMassive ? 15 : 3; // Grow the flash rapidly
+        this.circleLife -= this.isMassive ? 0.02 : 0.1; // Fade the flash slower
 
         let maxLife = 0;
         this.particles.forEach(p => {

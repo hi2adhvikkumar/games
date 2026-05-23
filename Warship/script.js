@@ -314,6 +314,46 @@ function checkBossTriggers() {
     }
 }
 
+function crackGlass(sourceX, sourceY) {
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const screenX = (sourceX - cx) * zoomLevel + cx;
+    const screenY = (sourceY - cy) * zoomLevel + cy;
+    
+    let crackLines = [];
+    let concentricRings = [];
+    const numRays = 7 + Math.floor(Math.random() * 6); // Spiderweb rays
+    
+    for (let r = 0; r < numRays; r++) {
+        let angle = (r / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        let length = 300 + Math.random() * 800; // Length of the crack
+        let segments = [];
+        let curX = screenX, curY = screenY;
+        
+        // Make the ray jagged
+        for (let j = 0; j < 8; j++) {
+            let segLen = length / 8;
+            let segAngle = angle + (Math.random() - 0.5) * 0.5;
+            curX += Math.cos(segAngle) * segLen;
+            curY += Math.sin(segAngle) * segLen;
+            segments.push({ x: curX, y: curY });
+        }
+        crackLines.push(segments);
+        
+        // Connect this ray to the next one to create concentric spiderweb breaks
+        if (Math.random() > 0.3) {
+            let nextR = (r + 1) % numRays;
+            let ringRadius = 50 + Math.random() * 300;
+            let p1x = screenX + Math.cos((r / numRays) * Math.PI * 2) * ringRadius;
+            let p1y = screenY + Math.sin((r / numRays) * Math.PI * 2) * ringRadius;
+            let p2x = screenX + Math.cos((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
+            let p2y = screenY + Math.sin((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
+            concentricRings.push({ x1: p1x, y1: p1y, x2: p2x, y2: p2y });
+        }
+    }
+    glassCracks.push({ x: screenX, y: screenY, lines: crackLines, rings: concentricRings });
+}
+
 function checkCollisions() {
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
@@ -338,6 +378,12 @@ function checkCollisions() {
                     ships.splice(j, 1);
                     score += 1;
                     if (ship.type === 'juggernaut') {
+                        for (let step = -200; step <= 200; step += 80) {
+                            explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
+                        }
+                        playMassiveExplosionSound();
+                        crackGlass(ship.x, ship.y);
+                        shakeIntensity = 40; // Enormous screen shake!
                         juggernautActive = false;
                         credits += 500; // Massive boss defeated!
                     } else if (ship.type === 'dreadnought') {
@@ -432,50 +478,6 @@ function checkCollisions() {
                 for(let e = 0; e < 5; e++) {
                     explosions.push(new Explosion(mine.x + (Math.random() - 0.5) * 60, mine.y + (Math.random() - 0.5) * 60));
                 }
-
-                // --- Cracked Glass Mechanic ---
-                const cx = canvas.width / 2;
-                const cy = canvas.height / 2;
-                const distToCenter = Math.sqrt(Math.pow(mine.x - cx, 2) + Math.pow(mine.y - cy, 2));
-                
-                // If the explosion is close enough to the periscope lens, crack it!
-                if (distToCenter < 380) {
-                    const screenX = (mine.x - cx) * zoomLevel + cx;
-                    const screenY = (mine.y - cy) * zoomLevel + cy;
-                    
-                    let crackLines = [];
-                    let concentricRings = [];
-                    const numRays = 5 + Math.floor(Math.random() * 5); // Spiderweb rays
-                    
-                    for (let r = 0; r < numRays; r++) {
-                        let angle = (r / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-                        let length = 80 + Math.random() * 220; // Length of the crack
-                        let segments = [];
-                        let curX = screenX, curY = screenY;
-                        
-                        // Make the ray jagged
-                        for (let j = 0; j < 5; j++) {
-                            let segLen = length / 5;
-                            let segAngle = angle + (Math.random() - 0.5) * 0.5;
-                            curX += Math.cos(segAngle) * segLen;
-                            curY += Math.sin(segAngle) * segLen;
-                            segments.push({ x: curX, y: curY });
-                        }
-                        crackLines.push(segments);
-                        
-                        // Connect this ray to the next one to create concentric spiderweb breaks
-                        if (Math.random() > 0.3) {
-                            let nextR = (r + 1) % numRays;
-                            let ringRadius = 30 + Math.random() * 80;
-                            let p1x = screenX + Math.cos((r / numRays) * Math.PI * 2) * ringRadius;
-                            let p1y = screenY + Math.sin((r / numRays) * Math.PI * 2) * ringRadius;
-                            let p2x = screenX + Math.cos((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
-                            let p2y = screenY + Math.sin((nextR / numRays) * Math.PI * 2) * ringRadius * (0.8 + Math.random() * 0.4);
-                            concentricRings.push({ x1: p1x, y1: p1y, x2: p2x, y2: p2y });
-                        }
-                    }
-                    glassCracks.push({ x: screenX, y: screenY, lines: crackLines, rings: concentricRings });
-                }
                 
                 const blastRadius = 2000; // Massive AOE distance to destroy everything in view
 
@@ -492,6 +494,12 @@ function checkCollisions() {
                             ships.splice(s, 1);
                             score += 1;
                             if (ship.type === 'juggernaut') {
+                                for (let step = -200; step <= 200; step += 80) {
+                                    explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
+                                }
+                                playMassiveExplosionSound();
+                                crackGlass(ship.x, ship.y);
+                                shakeIntensity = 40;
                                 juggernautActive = false;
                                 credits += 500;
                             } else if (ship.type === 'dreadnought') {
@@ -1220,9 +1228,6 @@ function draw() {
 
     // --- Draw Cracked Glass Overlay ---
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
-    ctx.clip(); // Keep the glass cracks strictly inside the periscope lens
 
     glassCracks.forEach(crack => {
         ctx.save();
