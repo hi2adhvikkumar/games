@@ -500,6 +500,8 @@ function checkCollisions() {
                     explosions.push(new Explosion(mine.x + (Math.random() - 0.5) * 60, mine.y + (Math.random() - 0.5) * 60));
                 }
                 
+                crackGlass(mine.x, mine.y); // Shatter the screen when a mine blows up!
+                
                 const blastRadius = 2000; // Massive AOE distance to destroy everything in view
 
                 // Destroy ships in AOE
