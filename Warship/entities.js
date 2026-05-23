@@ -626,3 +626,119 @@ class Raindrop {
         return this.y > viewBottom + 50;
     }
 }
+
+class Plane {
+    constructor() {
+        // Spawn high up in the sky, above the horizon
+        this.y = viewTop + Math.random() * (horizonY - viewTop - 80); 
+        
+        // 50% chance to spawn on the left or right side
+        if (Math.random() < 0.5) {
+            this.x = viewLeft - 100;
+            this.vx = Math.random() * 2.5 + 4; // Fast moving to the right
+            this.facingRight = true;
+        } else {
+            this.x = viewRight + 100;
+            this.vx = -(Math.random() * 2.5 + 4); // Fast moving to the left
+            this.facingRight = false;
+        }
+        this.width = 30;
+        this.height = 10;
+        this.hp = 1;
+    }
+
+    update() {
+        this.x += this.vx;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        if (!this.facingRight) ctx.scale(-1, 1);
+
+        // Jet Exhaust (Flickering Afterburner Flame)
+        ctx.fillStyle = `rgba(100, 200, 255, ${0.6 + Math.random() * 0.4})`;
+        ctx.beginPath();
+        ctx.moveTo(-18, -1);
+        ctx.lineTo(-26 - Math.random() * 8, 0);
+        ctx.lineTo(-18, 1);
+        ctx.fill();
+        
+        // Inner hotter flame
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 + Math.random() * 0.2})`;
+        ctx.beginPath();
+        ctx.moveTo(-18, -0.5);
+        ctx.lineTo(-22 - Math.random() * 3, 0);
+        ctx.lineTo(-18, 0.5);
+        ctx.fill();
+
+        // Far Tail Fin
+        ctx.fillStyle = '#33383d';
+        ctx.beginPath();
+        ctx.moveTo(-10, -2); ctx.lineTo(-16, -11); ctx.lineTo(-20, -11); ctx.lineTo(-16, -2);
+        ctx.fill();
+
+        // Far Wing (darker for 3D depth)
+        ctx.fillStyle = '#3a3f44';
+        ctx.beginPath();
+        ctx.moveTo(2, 0); ctx.lineTo(-6, -6); ctx.lineTo(-12, -6); ctx.lineTo(-4, 0);
+        ctx.fill();
+
+        // Sleek Stealth Fuselage
+        ctx.fillStyle = '#4a4f54';
+        ctx.beginPath();
+        ctx.moveTo(22, 0);   // Sharp nose tip
+        ctx.lineTo(12, -2);  // Upper nose
+        ctx.lineTo(6, -3);   // Base of canopy
+        ctx.lineTo(-8, -3);  // Spine
+        ctx.lineTo(-18, -2); // Top engine exhaust
+        ctx.lineTo(-18, 2);  // Bottom engine exhaust
+        ctx.lineTo(-12, 3);  // Lower tail
+        ctx.lineTo(0, 4);    // Belly
+        ctx.lineTo(8, 2);    // Intake bottom
+        ctx.lineTo(14, 1);   // Lower nose
+        ctx.closePath();
+        ctx.fill();
+        
+        // Angular Air Intake (Dark recess)
+        ctx.fillStyle = '#1a1c1e';
+        ctx.beginPath();
+        ctx.moveTo(6, 1); ctx.lineTo(10, 0); ctx.lineTo(8, 2); ctx.closePath();
+        ctx.fill();
+        
+        // Chiseled Stealth Edge (Body detail)
+        ctx.strokeStyle = '#3a3f44';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(6, 1); ctx.lineTo(-18, 0); ctx.stroke();
+        
+        // F-22 Gold-tinted Canopy (Reduces radar signature!)
+        ctx.fillStyle = '#cda434'; 
+        ctx.beginPath();
+        ctx.moveTo(10, -2); ctx.lineTo(4, -6); ctx.lineTo(-2, -5); ctx.lineTo(1, -2.5);
+        ctx.fill();
+
+        // Near Horizontal Stabilizer (Tail wing)
+        ctx.fillStyle = '#3a3f44';
+        ctx.beginPath();
+        ctx.moveTo(-10, 1); ctx.lineTo(-16, 4); ctx.lineTo(-22, 4); ctx.lineTo(-15, 1);
+        ctx.fill();
+
+        // Near Tail Fin
+        ctx.fillStyle = '#555b61';
+        ctx.beginPath();
+        ctx.moveTo(-8, -2); ctx.lineTo(-14, -12); ctx.lineTo(-18, -12); ctx.lineTo(-14, -2);
+        ctx.fill();
+
+        // Near Wing (brighter)
+        ctx.fillStyle = '#5a6066';
+        ctx.beginPath();
+        ctx.moveTo(2, 1); ctx.lineTo(-6, 9); ctx.lineTo(-14, 9); ctx.lineTo(-4, 1);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    isOffScreen() {
+        return (this.facingRight && this.x > viewRight + 150) || (!this.facingRight && this.x < viewLeft - 150);
+    }
+}

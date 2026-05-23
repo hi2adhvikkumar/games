@@ -183,6 +183,7 @@ let explosions = [];
 let crates = [];
 let mines = [];
 let clouds = [];
+let planes = [];
 let splashes = [];
 let glassCracks = [];
 let stormIntensity = 0;
@@ -285,6 +286,12 @@ function spawnMine() {
     }
 }
 
+function spawnPlane() {
+    if (planes.length < 2 && Math.random() < 0.005) { // Occasional air support
+        planes.push(new Plane());
+    }
+}
+
 function checkCollisions() {
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
@@ -323,6 +330,41 @@ function checkCollisions() {
                         dreadnoughtWarningTimer = 180; // Show warning for 3 seconds
                     }
                     
+                    if (score > highScore) {
+                        highScore = score;
+                        localStorage.setItem('warshipHighScore', highScore);
+                    }
+                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                }
+                hit = true;
+                break;
+            }
+        }
+        
+        if (hit) continue; // If the projectile already hit a ship, skip checking planes
+
+        // Check collision with planes
+        for (let p = planes.length - 1; p >= 0; p--) {
+            const plane = planes[p];
+            const dx = proj.x - plane.x;
+            const dy = proj.y - plane.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < proj.radius + plane.width / 2) {
+                explosions.push(new Explosion(plane.x, plane.y));
+                playExplosionSound();
+                projectiles.splice(i, 1);
+                
+                plane.hp -= 1;
+                if (plane.hp <= 0) {
+                    planes.splice(p, 1);
+                    score += 2; // Planes give double points!
+                    credits += 25;
+                    
+                    if (score >= nextBossScore) {
+                        nextBossScore += 20;
+                        spawnDreadnoughtPending = true;
+                        dreadnoughtWarningTimer = 180;
+                    }
                     if (score > highScore) {
                         highScore = score;
                         localStorage.setItem('warshipHighScore', highScore);
@@ -472,6 +514,25 @@ function checkCollisions() {
                     }
                 }
                 
+                // Destroy planes in AOE
+                for (let p = planes.length - 1; p >= 0; p--) {
+                    const plane = planes[p];
+                    const pdx = plane.x - mine.x;
+                    const pdy = plane.y - mine.y;
+                    const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+                    if (pdist < blastRadius + plane.width / 2) {
+                        explosions.push(new Explosion(plane.x, plane.y));
+                        planes.splice(p, 1);
+                        score += 2;
+                        credits += 25;
+                        if (score >= nextBossScore) {
+                            nextBossScore += 20;
+                            spawnDreadnoughtPending = true;
+                            dreadnoughtWarningTimer = 180;
+                        }
+                    }
+                }
+                
                 mines.splice(m, 1);
                 hit = true;
                 break;
@@ -527,6 +588,9 @@ function update() {
 
     mines.forEach(mine => mine.update());
     mines = mines.filter(mine => !mine.isOffScreen());
+
+    planes.forEach(plane => plane.update());
+    planes = planes.filter(plane => !plane.isOffScreen());
 
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
@@ -587,6 +651,7 @@ function update() {
     spawnShip();
     spawnCrate();
     spawnMine();
+    spawnPlane();
     checkCollisions();
 
     if (spawnDreadnoughtPending) {
@@ -747,6 +812,9 @@ function draw() {
         ctx.lineTo(x, y);
     }
     ctx.stroke();
+
+    // Draw planes (Before clouds so they can fly behind/through them)
+    planes.forEach(plane => plane.draw());
 
     // Draw ships
     ships.forEach(ship => ship.draw());
@@ -929,33 +997,61 @@ function draw() {
             const ty = Math.sin(ang) * (radius - 10);
             ctx.beginPath(); ctx.arc(tx, ty, 2, 0, Math.PI * 2); ctx.fill();
         }
+        
         if (isCompass) {
+            // Rotating compass ring
+            ctx.save();
+            ctx.rotate(-valueAngle);
+            ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#222';
+            ctx.font = 'bold 14px monospace';
             ctx.fillText('N', 0, -radius + 18);
             ctx.fillText('S', 0, radius - 18);
             ctx.fillText('E', radius - 18, 0);
             ctx.fillText('W', -radius + 18, 0);
+            
+            // Compass markings
+            ctx.strokeStyle = nightVisionEnabled ? '#00ff00' : '#222';
+            ctx.lineWidth = 1.5;
+            for(let i=0; i<360; i+=15) {
+                ctx.rotate(15 * Math.PI / 180);
+                ctx.beginPath(); ctx.moveTo(0, -radius+5); ctx.lineTo(0, -radius+10); ctx.stroke();
+            }
+            ctx.restore();
+            
+            // Fixed center marker
+            ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#c00'; // Red marker
+            ctx.beginPath(); ctx.moveTo(0, -radius + 5); ctx.lineTo(-5, -radius + 15); ctx.lineTo(5, -radius + 15); ctx.fill();
+            
+            // Label & Center Display
+            ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#222';
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText(label, 0, radius - 30);
+            
+            ctx.font = '20px monospace';
+            let degrees = (((valueAngle * 180 / Math.PI) % 360) + 360) % 360;
+            ctx.fillText(degrees.toFixed(0).padStart(3, '0') + '°', 0, 5);
         } else {
             ctx.fillText('MIN', -radius + 22, 0);
             ctx.fillText('MAX', radius - 22, 0);
+            
+            // Label
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText(label, 0, radius - 35);
+            
+            // Needle
+            ctx.rotate(valueAngle);
+            ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#c00'; // Red needle
+            ctx.beginPath();
+            ctx.moveTo(-3, 0);
+            ctx.lineTo(0, -radius + 10);
+            ctx.lineTo(3, 0);
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Center pin
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
         }
-        
-        // Label
-        ctx.font = 'bold 12px monospace';
-        ctx.fillText(label, 0, radius - 35);
-        
-        // Needle
-        ctx.rotate(valueAngle);
-        ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#c00'; // Red needle
-        ctx.beginPath();
-        ctx.moveTo(-3, 0);
-        ctx.lineTo(0, -radius + 10);
-        ctx.lineTo(3, 0);
-        ctx.arc(0, 0, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Center pin
-        ctx.fillStyle = '#111';
-        ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
         
         ctx.restore();
     };
@@ -1079,6 +1175,9 @@ function draw() {
         ctx.lineTo(canvas.width / 2 + i, canvas.height / 2 + 8);
         ctx.stroke();
     }
+    
+    // Thick border edge
+    ctx.stroke();
     
     // Thick border edge
     ctx.strokeStyle = '#000';
@@ -1224,6 +1323,7 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
+    drawBlips(planes, '#00ffff', 'ship'); // Cyan blips for aircraft
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
 
