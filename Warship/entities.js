@@ -104,7 +104,15 @@ class Ship {
         this.x = canvas.width / 2 + 350; // Spawn just outside the right edge of the periscope view
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Between horizon and turret
         this.type = type;
-        if (this.type === 'dreadnought') {
+        if (this.type === 'juggernaut') {
+            this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
+            this.y = horizonY + 30;
+            this.width = 480; // MASSIVE size, almost fills the periscope!
+            this.height = 75;
+            this.speed = 0.12; // Extremely slow and menacing
+            this.hp = 15; // Takes 15 hits
+            this.maxHp = 15;
+        } else if (this.type === 'dreadnought') {
             this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
             this.y = horizonY + 30;
             this.width = 180;
@@ -146,13 +154,13 @@ class Ship {
         const bobOffset = Math.sin((this.x * 0.03) + time * 0.8) * 3.2 + Math.cos((this.x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         
         // Draw foamy water wake trailing behind the ship
-        const wakeLength = 60;
+        const wakeLength = this.type === 'juggernaut' ? 120 : 60;
         const wakeY = this.y + bobOffset + this.height / 2 - 2; // Near the waterline
         const gradient = ctx.createLinearGradient(this.x + this.width / 2 + wakeLength, wakeY, this.x, wakeY);
         gradient.addColorStop(0, 'rgba(90, 155, 212, 0)'); // Transparent at tail
         gradient.addColorStop(1, 'rgba(90, 155, 212, 0.5)'); // Semi-transparent at ship
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = 15; // Wake thickness
+        ctx.lineWidth = this.type === 'juggernaut' ? 35 : 15; // Massive wake thickness
         ctx.beginPath();
         ctx.moveTo(this.x + this.width / 2 + wakeLength, wakeY);
         ctx.lineTo(this.x, wakeY);
@@ -178,7 +186,78 @@ class Ship {
         ctx.fillRect(bowX + this.width * 0.12, bottomY - 3, this.width * 0.88, 3);
         
         // Superstructure and Details
-        if (this.type === 'dreadnought') {
+        if (this.type === 'juggernaut') {
+            // Main bridge (massive, tiered)
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
+            ctx.fillRect(this.x - this.width * 0.15, deckY - 30, this.width * 0.3, 30);
+            ctx.fillRect(this.x - this.width * 0.08, deckY - 50, this.width * 0.16, 20);
+            ctx.fillRect(this.x - this.width * 0.03, deckY - 65, this.width * 0.06, 15);
+
+            // Smokestacks (4 of them)
+            ctx.fillStyle = '#222';
+            if (this.hp > 5) ctx.fillRect(this.x + this.width * 0.05, deckY - 45, 18, 40);
+            else ctx.fillRect(this.x + this.width * 0.05, deckY - 20, 18, 15); // Broken
+            
+            if (this.hp > 10) ctx.fillRect(this.x + this.width * 0.13, deckY - 42, 18, 38);
+            else ctx.fillRect(this.x + this.width * 0.13, deckY - 20, 18, 15); // Broken
+
+            ctx.fillRect(this.x + this.width * 0.21, deckY - 38, 18, 33);
+            ctx.fillRect(this.x + this.width * 0.29, deckY - 30, 18, 25);
+
+            // 4 Huge Cannons
+            ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+            ctx.fillRect(this.x - this.width * 0.40, deckY - 18, 30, 18); 
+            ctx.fillRect(this.x - this.width * 0.40 - 36, deckY - 14, 36, 8); 
+            
+            ctx.fillRect(this.x - this.width * 0.28, deckY - 26, 30, 18); 
+            ctx.fillRect(this.x - this.width * 0.28 - 36, deckY - 22, 36, 8); 
+
+            ctx.fillRect(this.x + this.width * 0.38, deckY - 18, 30, 18); 
+            ctx.fillRect(this.x + this.width * 0.38 + 30, deckY - 14, 36, 8);
+
+            ctx.fillRect(this.x + this.width * 0.25, deckY - 26, 30, 18); 
+            ctx.fillRect(this.x + this.width * 0.25 + 30, deckY - 22, 36, 8);
+
+            // Masts
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(this.x, deckY - 65); ctx.lineTo(this.x, deckY - 100);
+            ctx.moveTo(this.x - 20, deckY - 80); ctx.lineTo(this.x + 20, deckY - 80);
+            ctx.stroke();
+
+            // Draw Boss Health Bar Floating Above
+            const hpWidth = 240;
+            const hpX = this.x - hpWidth / 2;
+            const hpY = deckY - 125;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(hpX, hpY, hpWidth, 12);
+            ctx.fillStyle = '#ff00ff'; // Magenta for super boss
+            ctx.fillRect(hpX, hpY, hpWidth * (this.hp / this.maxHp), 12);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(hpX, hpY, hpWidth, 12);
+
+            // Draw Damage Effects (Fire and Smoke)
+            if (this.hp <= 10) {
+                ctx.fillStyle = `rgba(30, 30, 30, 0.8)`;
+                ctx.beginPath();
+                ctx.arc(this.x + this.width * 0.13 + 8 + Math.sin(time * 2) * 2, deckY - 30, 18, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.13 + 25 + Math.sin(time * 2 + 1) * 5, deckY - 60, 30, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width * 0.13 + 45 + Math.sin(time * 2 + 2) * 8, deckY - 90, 45, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            if (this.hp <= 5) {
+                ctx.fillStyle = `rgba(255, ${Math.floor(50 + Math.random() * 100)}, 0, 0.9)`;
+                ctx.beginPath();
+                ctx.moveTo(this.x - 30, deckY);
+                ctx.lineTo(this.x - 15, deckY - 40 - Math.random() * 30);
+                ctx.lineTo(this.x + 15, deckY - 15);
+                ctx.lineTo(this.x + 30, deckY - 50 - Math.random() * 40);
+                ctx.lineTo(this.x + 50, deckY);
+                ctx.fill();
+            }
+        } else if (this.type === 'dreadnought') {
             // Main bridge (large, tiered)
             ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
             ctx.fillRect(this.x - this.width * 0.15, deckY - 15, this.width * 0.3, 15);

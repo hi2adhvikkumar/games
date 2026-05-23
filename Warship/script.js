@@ -82,6 +82,11 @@ window.addEventListener('keydown', (e) => {
         spawnDreadnoughtPending = true;
         dreadnoughtWarningTimer = 180;
     }
+    // Cheat code 'Z' to instantly spawn the Massive Juggernaut
+    if (e.key && e.key.toLowerCase() === 'z') {
+        spawnJuggernautPending = true;
+        juggernautWarningTimer = 240;
+    }
     // Keyboard shortcuts 'Escape' or 'P' to pause/open menu
     if (e.key && (e.key === 'Escape' || e.key.toLowerCase() === 'p')) {
         if (isUpgradesOpen) {
@@ -167,9 +172,13 @@ let nightVisionEnabled = false;
 let blackAndWhiteEnabled = false;
 let shakeIntensity = 0;
 let dreadnoughtActive = false;
+let juggernautActive = false;
 let nextBossScore = 20; // Trigger the boss naturally every 20 points
+let nextJuggernautScore = 100; // Trigger the massive boss every 100 points
 let spawnDreadnoughtPending = false; 
+let spawnJuggernautPending = false; 
 let dreadnoughtWarningTimer = 0;
+let juggernautWarningTimer = 0;
 
 const turret = {
     x: canvas.width / 2,
@@ -261,7 +270,7 @@ function shoot() {
 }
 
 function spawnShip() {
-    if (dreadnoughtActive) return; // Stop spawning normal ships during the boss phase
+    if (dreadnoughtActive || juggernautActive) return; // Stop spawning normal ships during the boss phase
     
     if (Math.random() < 0.05) { // Increased spawn rate from 2% to 5% per frame
         const rand = Math.random();
@@ -292,6 +301,19 @@ function spawnPlane() {
     }
 }
 
+function checkBossTriggers() {
+    if (score >= nextJuggernautScore) {
+        nextJuggernautScore += 100;
+        if (nextBossScore <= score) nextBossScore = score + 20; // Skip Dreadnought to not overlap
+        spawnJuggernautPending = true;
+        juggernautWarningTimer = 240;
+    } else if (score >= nextBossScore) {
+        nextBossScore += 20;
+        spawnDreadnoughtPending = true;
+        dreadnoughtWarningTimer = 180;
+    }
+}
+
 function checkCollisions() {
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
@@ -315,7 +337,10 @@ function checkCollisions() {
                 if (ship.hp <= 0) {
                     ships.splice(j, 1);
                     score += 1;
-                    if (ship.type === 'dreadnought') {
+                    if (ship.type === 'juggernaut') {
+                        juggernautActive = false;
+                        credits += 500; // Massive boss defeated!
+                    } else if (ship.type === 'dreadnought') {
                         dreadnoughtActive = false;
                         credits += 150; // Boss defeated!
                     } else if (ship.type === 'submarine') {
@@ -324,11 +349,7 @@ function checkCollisions() {
                         credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
                     }
                     
-                    if (score >= nextBossScore) {
-                        nextBossScore += 20;
-                        spawnDreadnoughtPending = true;
-                        dreadnoughtWarningTimer = 180; // Show warning for 3 seconds
-                    }
+                    checkBossTriggers();
                     
                     if (score > highScore) {
                         highScore = score;
@@ -360,11 +381,7 @@ function checkCollisions() {
                     score += 2; // Planes give double points!
                     credits += 25;
                     
-                    if (score >= nextBossScore) {
-                        nextBossScore += 20;
-                        spawnDreadnoughtPending = true;
-                        dreadnoughtWarningTimer = 180;
-                    }
+                    checkBossTriggers();
                     if (score > highScore) {
                         highScore = score;
                         localStorage.setItem('warshipHighScore', highScore);
@@ -474,7 +491,10 @@ function checkCollisions() {
                         if (ship.hp <= 0) {
                             ships.splice(s, 1);
                             score += 1;
-                            if (ship.type === 'dreadnought') {
+                            if (ship.type === 'juggernaut') {
+                                juggernautActive = false;
+                                credits += 500;
+                            } else if (ship.type === 'dreadnought') {
                                 dreadnoughtActive = false;
                                 credits += 150;
                             } else if (ship.type === 'submarine') {
@@ -483,11 +503,7 @@ function checkCollisions() {
                                 credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
                             }
                             
-                            if (score >= nextBossScore) {
-                                nextBossScore += 20;
-                                spawnDreadnoughtPending = true;
-                                dreadnoughtWarningTimer = 180;
-                            }
+                            checkBossTriggers();
                         }
                     }
                 }
@@ -525,11 +541,7 @@ function checkCollisions() {
                         planes.splice(p, 1);
                         score += 2;
                         credits += 25;
-                        if (score >= nextBossScore) {
-                            nextBossScore += 20;
-                            spawnDreadnoughtPending = true;
-                            dreadnoughtWarningTimer = 180;
-                        }
+                        checkBossTriggers();
                     }
                 }
                 
@@ -561,6 +573,9 @@ function update() {
 
     if (dreadnoughtWarningTimer > 0) {
         dreadnoughtWarningTimer--;
+    }
+    if (juggernautWarningTimer > 0) {
+        juggernautWarningTimer--;
     }
 
     let activeProjectiles = [];
@@ -654,7 +669,12 @@ function update() {
     spawnPlane();
     checkCollisions();
 
-    if (spawnDreadnoughtPending) {
+    if (spawnJuggernautPending) {
+        ships = []; // Stop all existing ships to make way for the Juggernaut
+        ships.push(new Ship('juggernaut'));
+        juggernautActive = true;
+        spawnJuggernautPending = false;
+    } else if (spawnDreadnoughtPending) {
         ships = []; // Stop all existing ships to make way for the Dreadnought
         ships.push(new Ship('dreadnought'));
         dreadnoughtActive = true;
@@ -1333,6 +1353,7 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'juggernaut'), '#ffffff', 'ship'); // Bright white blips for juggernauts
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     drawBlips(planes, '#00ffff', 'ship'); // Cyan blips for aircraft
@@ -1541,7 +1562,17 @@ function draw() {
     }
 
     // Draw Dreadnought Warning over absolutely everything
-    if (dreadnoughtWarningTimer > 0) {
+    if (juggernautWarningTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 0, 255, ${0.5 + Math.abs(Math.sin(time * 5)) * 0.5})`; // Magenta warning
+        ctx.font = 'bold 26px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 10;
+        ctx.fillText('>> CRITICAL WARNING: JUGGERNAUT DETECTED <<', viewLeft + 20, viewTop + 20);
+        ctx.restore();
+    } else if (dreadnoughtWarningTimer > 0) {
         ctx.save();
         ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + Math.abs(Math.sin(time * 5)) * 0.5})`;
         ctx.font = 'bold 24px monospace';
