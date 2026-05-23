@@ -791,6 +791,8 @@ function draw() {
     // Draw projectiles (not clipped, so they wrap around the bottom area)
     projectiles.forEach(proj => proj.draw());
 
+    ctx.restore(); // Restore from Zoom to projectiles so it doesn't affect the UI and crosshair!
+
     // Draw periscope mask (Submarine Cockpit) and HUD overlay
     ctx.save();
     
