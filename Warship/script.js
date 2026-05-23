@@ -193,6 +193,7 @@ let crates = [];
 let mines = [];
 let clouds = [];
 let planes = [];
+let bombs = [];
 let splashes = [];
 let glassCracks = [];
 let stormIntensity = 0;
@@ -352,7 +353,7 @@ function crackGlass(sourceX, sourceY) {
             concentricRings.push({ x1: p1x, y1: p1y, x2: p2x, y2: p2y });
         }
     }
-    glassCracks.push({ x: screenX, y: screenY, lines: crackLines, rings: concentricRings });
+    glassCracks.push({ x: screenX, y: screenY, lines: crackLines, rings: concentricRings, life: 1.0 });
 }
 
 function checkCollisions() {
@@ -441,6 +442,26 @@ function checkCollisions() {
         }
         
         if (hit) continue; // If the projectile already hit a ship, skip checking crates
+        
+        // Check collision with bombs
+        for (let b = bombs.length - 1; b >= 0; b--) {
+            const bomb = bombs[b];
+            const dx = proj.x - bomb.x;
+            const dy = proj.y - bomb.y;
+            if (Math.abs(dx) < proj.radius + bomb.width / 2 && Math.abs(dy) < proj.radius + bomb.height / 2) {
+                explosions.push(new Explosion(bomb.x, bomb.y));
+                playExplosionSound();
+                projectiles.splice(i, 1);
+                bombs.splice(b, 1);
+                
+                credits += 15; // Reward for shooting bombs out of the air!
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                hit = true;
+                break;
+            }
+        }
+        
+        if (hit) continue; // Skip checking crates if a bomb was hit
 
         // Check collision with crates
         for (let k = crates.length - 1; k >= 0; k--) {
@@ -623,12 +644,33 @@ function update() {
         }
         return true;
     });
+    
+    let activeBombs = [];
+    bombs.forEach(bomb => {
+        bomb.update();
+        if (!bomb.isOffScreen()) {
+            activeBombs.push(bomb);
+        } else {
+            // Bomb successfully hit the water!
+            explosions.push(new Explosion(bomb.x, bomb.y, false));
+            explosions.push(new Explosion(bomb.x + 20, bomb.y - 10, false));
+            playExplosionSound();
+            crackGlass(bomb.x, bomb.y); // Shatter the screen!
+            shakeIntensity = 25; // Massive screen shake
+            credits = Math.max(0, credits - 20); // Big penalty
+            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+        }
+    });
+    bombs = activeBombs;
 
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
 
     splashes.forEach(splash => splash.update());
     splashes = splashes.filter(splash => !splash.isDead());
+
+    glassCracks.forEach(crack => crack.life -= 0.002); // Slowly fade out over time
+    glassCracks = glassCracks.filter(crack => crack.life > 0);
 
     clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
@@ -852,6 +894,9 @@ function draw() {
 
     // Draw planes (Before clouds so they can fly behind/through them)
     planes.forEach(plane => plane.draw());
+
+    // Draw falling bombs
+    bombs.forEach(bomb => bomb.draw());
 
     // Draw ships
     ships.forEach(ship => ship.draw());
@@ -1237,9 +1282,13 @@ function draw() {
 
     // --- Draw Cracked Glass Overlay ---
     ctx.save();
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+    ctx.clip(); // Keep the glass cracks strictly inside the periscope lens
 
     glassCracks.forEach(crack => {
         ctx.save();
+        ctx.globalAlpha = crack.life; // Apply fading opacity
         
         const drawCrackPaths = (offsetX, offsetY) => {
             crack.lines.forEach(segments => {
@@ -1372,6 +1421,7 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     drawBlips(planes, '#00ffff', 'ship'); // Cyan blips for aircraft
+    drawBlips(bombs, '#ffa500', 'bomb'); // Orange blips for falling bombs
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
 

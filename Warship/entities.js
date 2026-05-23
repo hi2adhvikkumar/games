@@ -835,6 +835,9 @@ class Plane {
         this.width = 30;
         this.height = 10;
         this.hp = 1;
+        
+        // Randomize when the plane will drop its bomb during its pass
+        this.bombTimer = Math.floor(Math.random() * 60) + 30;
     }
 
     update() {
@@ -842,6 +845,11 @@ class Plane {
         this.y += this.vy;
         if (this.vy < 0) this.vy += 0.03; // Slowly level out
         if (this.vy > 0) this.vy = 0;
+        
+        this.bombTimer--;
+        if (this.bombTimer === 0 && typeof bombs !== 'undefined') {
+            bombs.push(new Bomb(this.x, this.y));
+        }
     }
 
     draw() {
@@ -937,5 +945,82 @@ class Plane {
 
     isOffScreen() {
         return (this.facingRight && this.x > viewRight + 150) || (!this.facingRight && this.x < viewLeft - 150);
+    }
+}
+
+class Bomb {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vy = 1; // Initial fall speed
+        this.width = 12;
+        this.height = 20;
+        this.targetY = horizonY + Math.random() * 200 + 50; // Explodes randomly in the water
+    }
+
+    update() {
+        this.y += this.vy;
+        this.vy += 0.15; // Gravity acceleration
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Speed line / motion blur trail
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -this.height / 2 - 4);
+        ctx.lineTo(0, -this.height / 2 - 15 - Math.random() * 10);
+        ctx.stroke();
+
+        // Tail fins (back layer)
+        ctx.fillStyle = '#2a2d30';
+        ctx.beginPath();
+        ctx.moveTo(-this.width / 2 + 2, -this.height / 4);
+        ctx.lineTo(-this.width / 2 - 5, -this.height / 2 - 6);
+        ctx.lineTo(this.width / 2 + 5, -this.height / 2 - 6);
+        ctx.lineTo(this.width / 2 - 2, -this.height / 4);
+        ctx.fill();
+
+        // 3D Body Gradient
+        const grad = ctx.createLinearGradient(-this.width / 2, 0, this.width / 2, 0);
+        grad.addColorStop(0, '#2b3035');   // Left dark edge
+        grad.addColorStop(0.3, '#7a858e'); // Metallic highlight
+        grad.addColorStop(1, '#1a1d20');   // Right shadow
+
+        // Aerodynamic teardrop body
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(0, this.height / 2 + 2); // Bottom tip
+        ctx.quadraticCurveTo(this.width / 2 + 2, 0, this.width / 2 - 2, -this.height / 2); // Right curve
+        ctx.lineTo(-this.width / 2 + 2, -this.height / 2); // Flat top
+        ctx.quadraticCurveTo(-this.width / 2 - 2, 0, 0, this.height / 2 + 2); // Left curve
+        ctx.fill();
+
+        // Classic Yellow Ordnance Stripe
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-this.width / 2 + 1.5, this.height / 4);
+        ctx.lineTo(this.width / 2 - 1.5, this.height / 4);
+        ctx.stroke();
+
+        // Glowing arming indicator tip
+        ctx.fillStyle = '#ff3300';
+        ctx.beginPath(); ctx.arc(0, this.height / 2 + 1, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffaa00'; // Inner hot glow
+        ctx.beginPath(); ctx.arc(0, this.height / 2 + 1, 1, 0, Math.PI * 2); ctx.fill();
+
+        // Center Fin (Front layer for 3D perspective)
+        ctx.fillStyle = '#1a1d20';
+        ctx.fillRect(-1.5, -this.height / 2 - 6, 3, 10);
+
+        ctx.restore();
+    }
+
+    isOffScreen() {
+        return this.y >= this.targetY;
     }
 }
