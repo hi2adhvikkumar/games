@@ -275,7 +275,8 @@ function spawnShip() {
     if (Math.random() < 0.05) { // Increased spawn rate from 2% to 5% per frame
         const rand = Math.random();
         let type = 'normal';
-        if (rand < 0.35) type = 'battleship'; // 35% chance
+        if (rand < 0.25) type = 'battleship'; // 25% chance
+        else if (rand < 0.35) type = 'aircraftcarrier'; // 10% chance
         else if (rand < 0.55) type = 'ptboat'; // 20% chance
         else if (rand < 0.70) type = 'submarine'; // 15% chance
         ships.push(new Ship(type));
@@ -364,8 +365,7 @@ function checkCollisions() {
             const ship = ships[j];
             const dx = proj.x - ship.x;
             const dy = proj.y - ship.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < proj.radius + ship.width / 2) {
+            if (Math.abs(dx) < proj.radius + ship.width / 2 && Math.abs(dy) < proj.radius + ship.height / 2) {
                 if (ship.type === 'submarine' && ship.depth > 5) continue; // Too deep to hit!
 
                 explosions.push(new Explosion(ship.x, ship.y));
@@ -389,6 +389,8 @@ function checkCollisions() {
                     } else if (ship.type === 'dreadnought') {
                         dreadnoughtActive = false;
                         credits += 150; // Boss defeated!
+                    } else if (ship.type === 'aircraftcarrier') {
+                        credits += 50; // High reward for carrier!
                     } else if (ship.type === 'submarine') {
                         credits += 40; // High reward for sub!
                     } else {
@@ -415,8 +417,7 @@ function checkCollisions() {
             const plane = planes[p];
             const dx = proj.x - plane.x;
             const dy = proj.y - plane.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < proj.radius + plane.width / 2) {
+            if (Math.abs(dx) < proj.radius + plane.width / 2 && Math.abs(dy) < proj.radius + plane.height / 2) {
                 explosions.push(new Explosion(plane.x, plane.y));
                 playExplosionSound();
                 projectiles.splice(i, 1);
@@ -446,8 +447,7 @@ function checkCollisions() {
             const crate = crates[k];
             const dx = proj.x - crate.x;
             const dy = proj.y - crate.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < proj.radius + crate.width / 2) {
+            if (Math.abs(dx) < proj.radius + crate.width / 2 && Math.abs(dy) < proj.radius + crate.height / 2) {
                 explosions.push(new Explosion(crate.x, crate.y));
                 playExplosionSound();
                 projectiles.splice(i, 1);
@@ -505,6 +505,8 @@ function checkCollisions() {
                             } else if (ship.type === 'dreadnought') {
                                 dreadnoughtActive = false;
                                 credits += 150;
+                            } else if (ship.type === 'aircraftcarrier') {
+                                credits += 50;
                             } else if (ship.type === 'submarine') {
                                 credits += 40;
                             } else {
@@ -613,7 +615,14 @@ function update() {
     mines = mines.filter(mine => !mine.isOffScreen());
 
     planes.forEach(plane => plane.update());
-    planes = planes.filter(plane => !plane.isOffScreen());
+    planes = planes.filter(plane => {
+        if (plane.isOffScreen()) {
+            credits = Math.max(0, credits - 10); // Lose 10 credits if a plane escapes!
+            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            return false;
+        }
+        return true;
+    });
 
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
@@ -1356,6 +1365,7 @@ function draw() {
     let visibleShipsCount = 0;
     visibleShipsCount += drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought' && s.type !== 'submarine'), '#ff4444', 'ship'); // Red blips for normal ships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'aircraftcarrier'), '#ffcc00', 'ship'); // Gold/Yellow-Orange blips for carriers
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'juggernaut'), '#ffffff', 'ship'); // Bright white blips for juggernauts

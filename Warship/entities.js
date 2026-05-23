@@ -112,6 +112,12 @@ class Ship {
             this.speed = 0.12; // Extremely slow and menacing
             this.hp = 15; // Takes 15 hits
             this.maxHp = 15;
+        } else if (this.type === 'aircraftcarrier') {
+            this.width = 140;
+            this.height = 25;
+            this.speed = Math.random() * 0.4 + 0.4;
+            this.hp = 5; // Takes 5 hits
+            this.planeTimer = 0; // Timer for launching planes
         } else if (this.type === 'dreadnought') {
             this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
             this.y = horizonY + 30;
@@ -141,6 +147,15 @@ class Ship {
 
     update() {
         this.x -= this.speed;
+        if (this.type === 'aircraftcarrier') {
+            this.planeTimer++;
+            if (this.planeTimer > 180) { // Launch plane roughly every 3 seconds
+                this.planeTimer = 0;
+                if (planes.length < 6) { // Carriers can launch more planes into the sky
+                    planes.push(new Plane(this.x, this.y - this.height));
+                }
+            }
+        }
     }
 
     draw() {
@@ -257,6 +272,97 @@ class Ship {
                 ctx.lineTo(this.x + 50, deckY);
                 ctx.fill();
             }
+        } else if (this.type === 'aircraftcarrier') {
+            // Support struts under the overhang
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = -this.width * 0.45; i < this.width * 0.45; i += 20) {
+                ctx.moveTo(this.x + i, deckY);
+                ctx.lineTo(this.x + i + 10, deckY + 8);
+            }
+            ctx.stroke();
+
+            // Massive flat flight deck (Asphalt/Dark grey)
+            ctx.fillStyle = '#33383d';
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.width * 0.6, deckY - 1); // extended rear
+            ctx.lineTo(this.x + this.width * 0.55, deckY - 1); // extended front
+            ctx.lineTo(this.x + this.width * 0.5, deckY - 6); 
+            ctx.lineTo(this.x - this.width * 0.6, deckY - 6);
+            ctx.fill();
+
+            // Angled landing strip section (lighter grey)
+            ctx.fillStyle = '#4a4f54';
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.width * 0.6, deckY - 1);
+            ctx.lineTo(this.x + this.width * 0.2, deckY - 1);
+            ctx.lineTo(this.x + this.width * 0.1, deckY - 6);
+            ctx.lineTo(this.x - this.width * 0.6, deckY - 6);
+            ctx.fill();
+
+            // Runway strip (dashed white line)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.width * 0.55, deckY - 4);
+            ctx.lineTo(this.x + this.width * 0.45, deckY - 4);
+            ctx.stroke();
+            
+            // Catapult lines (solid yellow)
+            ctx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width * 0.2, deckY - 2.5);
+            ctx.lineTo(this.x + this.width * 0.5, deckY - 2.5);
+            ctx.moveTo(this.x + this.width * 0.1, deckY - 5);
+            ctx.lineTo(this.x + this.width * 0.4, deckY - 5);
+            ctx.stroke();
+
+            // Island (control tower)
+            ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a'; // Hull color
+            ctx.fillRect(this.x + this.width * 0.15, deckY - 22, 28, 16);
+            ctx.fillStyle = '#3a4a5a'; // darker tier
+            ctx.fillRect(this.x + this.width * 0.18, deckY - 32, 18, 10);
+            
+            // Tower windows (black slits)
+            ctx.fillStyle = '#111';
+            ctx.fillRect(this.x + this.width * 0.15, deckY - 18, 28, 3);
+            ctx.fillRect(this.x + this.width * 0.18, deckY - 28, 18, 2);
+
+            // Radar and Antennas
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); 
+            ctx.moveTo(this.x + this.width * 0.25, deckY - 32);
+            ctx.lineTo(this.x + this.width * 0.25, deckY - 45); // main mast
+            ctx.moveTo(this.x + this.width * 0.2, deckY - 40);
+            ctx.lineTo(this.x + this.width * 0.3, deckY - 40); // crossbar
+            ctx.stroke();
+            
+            // Animated spinning radar dish
+            ctx.beginPath();
+            ctx.ellipse(this.x + this.width * 0.25, deckY - 45, 6 * Math.abs(Math.sin(time * 3)), 2, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Parked tiny F-22 planes on the rear deck
+            const drawTinyPlane = (px, py) => {
+                ctx.fillStyle = '#7a8a9a';
+                ctx.beginPath();
+                ctx.moveTo(px + 4, py);
+                ctx.lineTo(px - 2, py - 2);
+                ctx.lineTo(px - 4, py - 2);
+                ctx.lineTo(px - 2, py);
+                ctx.lineTo(px - 4, py + 1); // tail
+                ctx.lineTo(px + 4, py + 1);
+                ctx.fill();
+            };
+            drawTinyPlane(this.x - this.width * 0.45, deckY - 7);
+            drawTinyPlane(this.x - this.width * 0.35, deckY - 7);
+            drawTinyPlane(this.x - this.width * 0.25, deckY - 7);
+            drawTinyPlane(this.x - this.width * 0.40, deckY - 8);
+            drawTinyPlane(this.x - this.width * 0.30, deckY - 8);
         } else if (this.type === 'dreadnought') {
             // Main bridge (large, tiered)
             ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
@@ -709,16 +815,19 @@ class Raindrop {
 }
 
 class Plane {
-    constructor() {
-        // Spawn high up in the sky, above the horizon
-        this.y = viewTop + Math.random() * (horizonY - viewTop - 80); 
-        
-        // 50% chance to spawn on the left or right side
-        if (Math.random() < 0.5) {
-            this.x = viewLeft - 100;
-            this.vx = Math.random() * 2.5 + 4; // Fast moving to the right
-            this.facingRight = true;
+    constructor(spawnX = null, spawnY = null) {
+        if (spawnX !== null && spawnY !== null) {
+            this.x = spawnX;
+            this.y = spawnY;
+            this.facingRight = false;
+            this.vx = -(Math.random() * 2.5 + 4); // Always fly left
+            this.vy = -3.5; // Climb steeply from the carrier deck
         } else {
+            // Spawn high up in the sky, above the horizon
+            this.y = viewTop + Math.random() * (horizonY - viewTop - 80); 
+            this.vy = 0;
+            
+            // Always spawn on the right side
             this.x = viewRight + 100;
             this.vx = -(Math.random() * 2.5 + 4); // Fast moving to the left
             this.facingRight = false;
@@ -730,12 +839,19 @@ class Plane {
 
     update() {
         this.x += this.vx;
+        this.y += this.vy;
+        if (this.vy < 0) this.vy += 0.03; // Slowly level out
+        if (this.vy > 0) this.vy = 0;
     }
 
     draw() {
         ctx.save();
         ctx.translate(this.x, this.y);
         if (!this.facingRight) ctx.scale(-1, 1);
+
+        // Tilt the plane slightly if it is climbing
+        const pitch = Math.atan2(this.vy, Math.abs(this.vx));
+        ctx.rotate(pitch);
 
         // Jet Exhaust (Flickering Afterburner Flame)
         ctx.fillStyle = `rgba(100, 200, 255, ${0.6 + Math.random() * 0.4})`;
