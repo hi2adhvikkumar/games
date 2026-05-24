@@ -596,7 +596,7 @@ function update() {
         const oldProgress = wiperProgress;
         wiperProgress += 0.025; // Speed of the wiper
         if (oldProgress < 0.5 && wiperProgress >= 0.5) { // Clear screen at the apex of the wipe
-            glassCracks = [];
+            glassCracks.forEach(crack => crack.life -= 0.2); // Only remove a little bit of the cracks per wipe
             raindrops = [];
         }
         if (wiperProgress >= 1) wiperProgress = 0; // Stop wiper when cycle finishes
