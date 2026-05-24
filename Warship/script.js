@@ -203,6 +203,7 @@ let raindrops = [];
 let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
+let wiperProgress = 0;
 
 let stickyNoteState = 0;
 const stickyMessages = [
@@ -589,6 +590,17 @@ function checkCollisions() {
 function update() {
     updateTurretAngle();
     time += 0.05; // For wave animation
+    
+    // Animate the windshield wiper
+    if (wiperProgress > 0) {
+        const oldProgress = wiperProgress;
+        wiperProgress += 0.025; // Speed of the wiper
+        if (oldProgress < 0.5 && wiperProgress >= 0.5) { // Clear screen at the apex of the wipe
+            glassCracks = [];
+            raindrops = [];
+        }
+        if (wiperProgress >= 1) wiperProgress = 0; // Stop wiper when cycle finishes
+    }
     
     // Friction for interactive gauges (keeps them where dragged, allows button spins to slow down)
     for (let key in interactiveGauges) {
@@ -1211,6 +1223,27 @@ function draw() {
         ctx.fillText(buttonLabels[key], center.x, by + 12.5);
     }
     
+    // Draw Wiper Button
+    const wiperX = cx + 495; // Aligned with the START button above it
+    const wiperY = cy + 380; // Placed far under the START button
+    ctx.fillStyle = nightVisionEnabled ? '#003300' : '#8a6327';
+    ctx.fillRect(wiperX, wiperY, 80, 30);
+    
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(wiperX, wiperY, 80, 5);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(wiperX, wiperY + 25, 80, 5);
+    
+    ctx.strokeStyle = nightVisionEnabled ? '#00ff00' : '#111';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(wiperX, wiperY, 80, 30);
+    
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#111';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("WIPER", wiperX + 40, wiperY + 15);
+
     // Draw Interactive Sticky Note
     const stickyX = cx + 430;
     const stickyY = cy - 40;
@@ -1323,6 +1356,42 @@ function draw() {
         ctx.restore();
     });
     ctx.restore();
+
+    // --- Animated Wiper ---
+    if (wiperProgress > 0) {
+        ctx.save();
+        
+        // Clip wiper to only be visible inside the glass!
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+        ctx.clip();
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2 + 300); // Pivot at the bottom of the lens
+        
+        // Sweep angle fully across the lens from far left to far right
+        const angle = -Math.PI * 0.6 + Math.sin(wiperProgress * Math.PI) * (Math.PI * 1.2);
+        ctx.rotate(angle);
+        
+        // Wiper arm (Thick metal)
+        ctx.fillStyle = nightVisionEnabled ? '#003300' : '#222';
+        ctx.fillRect(-6, -600, 12, 600);
+        
+        // Wiper blade (Rubber)
+        ctx.fillStyle = nightVisionEnabled ? '#001100' : '#050505';
+        ctx.fillRect(-14, -580, 8, 560);
+        
+        // Connecting struts
+        ctx.fillRect(-14, -150, 10, 4);
+        ctx.fillRect(-14, -300, 10, 4);
+        ctx.fillRect(-14, -450, 10, 4);
+        
+        // Pivot joint
+        ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#444';
+        ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+        
+        ctx.restore();
+    }
 
     ctx.restore();
 
@@ -1970,6 +2039,17 @@ canvas.addEventListener('click', (e) => {
         }
     }
     
+    // Check if Wiper Button was clicked
+    const wiperX = cxCenter + 495;
+    const wiperY = cyCenter + 380;
+    if (cx >= wiperX && cx <= wiperX + 80 && cy >= wiperY && cy <= wiperY + 30) {
+        if (wiperProgress === 0) {
+            wiperProgress = 0.01; // Start the wipe animation!
+            playSonarPing('submarine'); // Mechanical sound
+        }
+        return;
+    }
+
     // Check if Sticky Note was clicked
     const stickyX = cxCenter + 430;
     const stickyY = cyCenter - 40;
