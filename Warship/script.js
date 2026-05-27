@@ -277,7 +277,8 @@ function spawnShip() {
     if (Math.random() < 0.05) { // Increased spawn rate from 2% to 5% per frame
         const rand = Math.random();
         let type = 'normal';
-        if (rand < 0.25) type = 'battleship'; // 25% chance
+        if (rand < 0.05) type = 'civilian'; // 5% chance for a hospital ship (much rarer)
+        else if (rand < 0.25) type = 'battleship'; // 20% chance
         else if (rand < 0.35) type = 'aircraftcarrier'; // 10% chance
         else if (rand < 0.55) type = 'ptboat'; // 20% chance
         else if (rand < 0.70) type = 'submarine'; // 15% chance
@@ -378,25 +379,30 @@ function checkCollisions() {
                 ship.hp -= 1;
                 if (ship.hp <= 0) {
                     ships.splice(j, 1);
-                    score += 1;
-                    if (ship.type === 'juggernaut') {
-                        for (let step = -200; step <= 200; step += 80) {
-                            explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
-                        }
-                        playMassiveExplosionSound();
-                        crackGlass(ship.x, ship.y);
-                        shakeIntensity = 40; // Enormous screen shake!
-                        juggernautActive = false;
-                        credits += 500; // Massive boss defeated!
-                    } else if (ship.type === 'dreadnought') {
-                        dreadnoughtActive = false;
-                        credits += 150; // Boss defeated!
-                    } else if (ship.type === 'aircraftcarrier') {
-                        credits += 50; // High reward for carrier!
-                    } else if (ship.type === 'submarine') {
-                        credits += 40; // High reward for sub!
+                    
+                    if (ship.type === 'civilian') {
+                        credits = Math.max(0, credits - 20); // Penalty for hitting a hospital ship!
                     } else {
-                        credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                        score += 1; // Reward for normal ships
+                        if (ship.type === 'juggernaut') {
+                            for (let step = -200; step <= 200; step += 80) {
+                                explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
+                            }
+                            playMassiveExplosionSound();
+                            crackGlass(ship.x, ship.y);
+                            shakeIntensity = 40; // Enormous screen shake!
+                            juggernautActive = false;
+                            credits += 500; // Massive boss defeated!
+                        } else if (ship.type === 'dreadnought') {
+                            dreadnoughtActive = false;
+                            credits += 150; // Boss defeated!
+                        } else if (ship.type === 'aircraftcarrier') {
+                            credits += 50; // High reward for carrier!
+                        } else if (ship.type === 'submarine') {
+                            credits += 40; // High reward for sub!
+                        } else {
+                            credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                        }
                     }
                     
                     checkBossTriggers();
@@ -516,25 +522,30 @@ function checkCollisions() {
                         ship.hp -= 5; // Mines do massive damage
                         if (ship.hp <= 0) {
                             ships.splice(s, 1);
-                            score += 1;
-                            if (ship.type === 'juggernaut') {
-                                for (let step = -200; step <= 200; step += 80) {
-                                    explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
-                                }
-                                playMassiveExplosionSound();
-                                crackGlass(ship.x, ship.y);
-                                shakeIntensity = 40;
-                                juggernautActive = false;
-                                credits += 500;
-                            } else if (ship.type === 'dreadnought') {
-                                dreadnoughtActive = false;
-                                credits += 150;
-                            } else if (ship.type === 'aircraftcarrier') {
-                                credits += 50;
-                            } else if (ship.type === 'submarine') {
-                                credits += 40;
+                            
+                            if (ship.type === 'civilian') {
+                                credits = Math.max(0, credits - 20); 
                             } else {
-                                credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                                score += 1;
+                                if (ship.type === 'juggernaut') {
+                                    for (let step = -200; step <= 200; step += 80) {
+                                        explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
+                                    }
+                                    playMassiveExplosionSound();
+                                    crackGlass(ship.x, ship.y);
+                                    shakeIntensity = 40;
+                                    juggernautActive = false;
+                                    credits += 500;
+                                } else if (ship.type === 'dreadnought') {
+                                    dreadnoughtActive = false;
+                                    credits += 150;
+                                } else if (ship.type === 'aircraftcarrier') {
+                                    credits += 50;
+                                } else if (ship.type === 'submarine') {
+                                    credits += 40;
+                                } else {
+                                    credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                                }
                             }
                             
                             checkBossTriggers();
@@ -598,6 +609,7 @@ function update() {
         if (oldProgress < 0.5 && wiperProgress >= 0.5) { // Clear screen at the apex of the wipe
             glassCracks.forEach(crack => crack.life -= 0.2); // Only remove a little bit of the cracks per wipe
             raindrops = [];
+            playWiperSqueak(); // Play squeak on the return sweep!
         }
         if (wiperProgress >= 1) wiperProgress = 0; // Stop wiper when cycle finishes
     }
@@ -1483,7 +1495,7 @@ function draw() {
     };
 
     let visibleShipsCount = 0;
-    visibleShipsCount += drawBlips(ships.filter(s => s.type !== 'battleship' && s.type !== 'ptboat' && s.type !== 'dreadnought' && s.type !== 'submarine'), '#ff4444', 'ship'); // Red blips for normal ships
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'normal' || s.type === 'civilian'), '#ff4444', 'ship'); // Red blips for normal and civilian ships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'aircraftcarrier'), '#ffcc00', 'ship'); // Gold/Yellow-Orange blips for carriers
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
@@ -2046,6 +2058,7 @@ canvas.addEventListener('click', (e) => {
         if (wiperProgress === 0) {
             wiperProgress = 0.01; // Start the wipe animation!
             playSonarPing('submarine'); // Mechanical sound
+            playWiperSqueak(); // Play squeak on the forward sweep!
         }
         return;
     }

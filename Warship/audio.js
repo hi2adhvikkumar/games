@@ -391,3 +391,34 @@ function playMassiveExplosionSound() {
         console.error("Audio error:", e);
     }
 }
+
+function playWiperSqueak() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 0.4;
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        // Low-pitched, heavy rubber squeak (less raspy)
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(250, now);
+        osc.frequency.exponentialRampToValueAtTime(450, now + duration * 0.5);
+        osc.frequency.exponentialRampToValueAtTime(150, now + duration);
+        
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.6, now + 0.05); // Much louder attack
+        gain.gain.linearRampToValueAtTime(0.3, now + duration - 0.05); // Louder sustain
+        gain.gain.linearRampToValueAtTime(0, now + duration);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start(now);
+        osc.stop(now + duration);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}

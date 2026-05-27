@@ -104,7 +104,13 @@ class Ship {
         this.x = canvas.width / 2 + 350; // Spawn just outside the right edge of the periscope view
         this.y = horizonY + Math.random() * (turret.y - horizonY); // Between horizon and turret
         this.type = type;
-        if (this.type === 'juggernaut') {
+        if (this.type === 'civilian') {
+            this.width = 50;
+            this.height = 20;
+            this.speed = Math.random() * 1.5 + 0.8; // Cruising speed
+            this.hp = 1; // Takes 1 hit
+            this.light = true;
+        } else if (this.type === 'juggernaut') {
             this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
             this.y = horizonY + 30;
             this.width = 480; // MASSIVE size, almost fills the periscope!
@@ -187,7 +193,11 @@ class Ship {
         const bottomY = this.y + bobOffset + this.height / 2;
 
         // Draw Hull with slanted bow
-        ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+        if (this.type === 'civilian') {
+            ctx.fillStyle = '#e8ecef'; // White hospital ship hull
+        } else {
+            ctx.fillStyle = this.light ? '#5a6a7a' : '#3a4a5a';
+        }
         ctx.beginPath();
         ctx.moveTo(bowX, deckY); // Tip of bow
         ctx.lineTo(sternX, deckY); // Deck line
@@ -498,6 +508,64 @@ class Ship {
             ctx.moveTo(this.x, deckY - 6);
             ctx.lineTo(this.x - 2, deckY - 14);
             ctx.stroke();
+        } else if (this.type === 'civilian') {
+            // --- Enhanced Hospital Ship ---
+            
+            // Green stripe along the hull (Classic Hospital Ship Marking)
+            ctx.fillStyle = '#00aa44';
+            ctx.fillRect(bowX + this.width * 0.15, deckY + 3, this.width * 0.8, 2);
+
+            // Main Superstructure (Tiered ocean-liner style)
+            ctx.fillStyle = '#f8fbfc'; // Brilliant white
+            ctx.fillRect(this.x - this.width * 0.25, deckY - 8, this.width * 0.6, 8); // Lower deck
+            ctx.fillStyle = '#e8ecef';
+            ctx.fillRect(this.x - this.width * 0.15, deckY - 16, this.width * 0.4, 8); // Middle deck
+            ctx.fillStyle = '#d0d8dc';
+            ctx.fillRect(this.x - this.width * 0.05, deckY - 22, this.width * 0.15, 6); // Bridge
+            
+            // Bridge Windows
+            ctx.fillStyle = '#87ceeb'; // Glass blue
+            ctx.fillRect(this.x - this.width * 0.02, deckY - 20, 2, 2);
+            ctx.fillRect(this.x + this.width * 0.02, deckY - 20, 2, 2);
+            ctx.fillRect(this.x + this.width * 0.06, deckY - 20, 2, 2);
+
+            // Twin angled smokestacks
+            const drawStack = (sx, sy) => {
+                ctx.fillStyle = '#f4f4f4';
+                ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 6, sy); ctx.lineTo(sx + 4, sy - 12); ctx.lineTo(sx - 2, sy - 12); ctx.fill();
+                ctx.fillStyle = '#cc0000'; // Red band
+                ctx.beginPath(); ctx.moveTo(sx - 1.5, sy - 9); ctx.lineTo(sx + 4.5, sy - 9); ctx.lineTo(sx + 4, sy - 12); ctx.lineTo(sx - 2, sy - 12); ctx.fill();
+            };
+            drawStack(this.x + this.width * 0.1, deckY - 16);
+            drawStack(this.x + this.width * 0.25, deckY - 8);
+
+            // Masts/Antennas
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(this.x + this.width * 0.02, deckY - 22); ctx.lineTo(this.x + this.width * 0.02, deckY - 35); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(this.x - this.width * 0.3, deckY); ctx.lineTo(this.x - this.width * 0.3, deckY - 20); ctx.stroke();
+
+            // Crisp Red Crosses with white backgrounds to pop
+            const drawRedCross = (cx, cy, size) => {
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath(); ctx.arc(cx, cy, size * 0.7, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#cc0000';
+                ctx.fillRect(cx - size * 0.15, cy - size * 0.5, size * 0.3, size);
+                ctx.fillRect(cx - size * 0.5, cy - size * 0.15, size, size * 0.3);
+            };
+
+            // Forward hull cross
+            drawRedCross(this.x - this.width * 0.15, deckY + 8, 6);
+            // Aft hull cross
+            drawRedCross(this.x + this.width * 0.25, deckY + 8, 6);
+            // Superstructure cross
+            drawRedCross(this.x + this.width * 0.05, deckY - 4, 5);
+            
+            // Orange Lifeboats hanging on the sides
+            ctx.fillStyle = '#ff6600';
+            ctx.fillRect(this.x - this.width * 0.2, deckY - 2, 5, 2.5);
+            ctx.fillRect(this.x - this.width * 0.05, deckY - 2, 5, 2.5);
+            ctx.fillRect(this.x + this.width * 0.15, deckY - 2, 5, 2.5);
         } else {
             // Normal ship (e.g. Destroyer)
             ctx.fillStyle = this.light ? '#6a7a8a' : '#4a5a6a';
