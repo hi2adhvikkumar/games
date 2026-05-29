@@ -204,6 +204,8 @@ let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
 let wiperProgress = 0;
+let isSubmerged = false;
+let submergeRatio = 0;
 
 let stickyNoteState = 0;
 const stickyMessages = [
@@ -249,6 +251,8 @@ function updateTurretAngle() {
 }
 
 function shoot() {
+    if (isSubmerged) return; // Can't shoot while underwater!
+
     if (weaponType === 'single') {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, horizonY, false));
         playShootSound();
@@ -601,6 +605,12 @@ function checkCollisions() {
 function update() {
     updateTurretAngle();
     time += 0.05; // For wave animation
+
+    if (isSubmerged) {
+        submergeRatio = Math.min(1.0, submergeRatio + 0.02);
+    } else {
+        submergeRatio = Math.max(0.0, submergeRatio - 0.02);
+    }
     
     // Animate the windshield wiper
     if (wiperProgress > 0) {
@@ -677,14 +687,21 @@ function update() {
         if (!bomb.isOffScreen()) {
             activeBombs.push(bomb);
         } else {
-            // Bomb successfully hit the water!
-            explosions.push(new Explosion(bomb.x, bomb.y, false));
-            explosions.push(new Explosion(bomb.x + 20, bomb.y - 10, false));
-            playExplosionSound();
-            crackGlass(bomb.x, bomb.y); // Shatter the screen!
-            shakeIntensity = 25; // Massive screen shake
-            credits = Math.max(0, credits - 20); // Big penalty
-            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (isSubmerged) {
+                // Safely dodged! Muffled splash above
+                explosions.push(new Explosion(bomb.x, bomb.y, false));
+                playSplashSound();
+                shakeIntensity = 5; // Very small shake
+            } else {
+                // Bomb successfully hit the water!
+                explosions.push(new Explosion(bomb.x, bomb.y, false));
+                explosions.push(new Explosion(bomb.x + 20, bomb.y - 10, false));
+                playExplosionSound();
+                crackGlass(bomb.x, bomb.y); // Shatter the screen!
+                shakeIntensity = 25; // Massive screen shake
+                credits = Math.max(0, credits - 20); // Big penalty
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
         }
     });
     bombs = activeBombs;
@@ -954,6 +971,22 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
 
+    // Apply Underwater Submerge overlay
+    if (submergeRatio > 0) {
+        ctx.fillStyle = `rgba(0, 5, 15, ${submergeRatio * 0.95})`; // Very dark, but you can just barely see through it!
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        
+        // Draw rising bubbles
+        ctx.fillStyle = `rgba(255, 255, 255, ${submergeRatio * 0.25})`; // Slightly more visible bubbles
+        for (let i = 0; i < 30; i++) {
+            const bx = canvas.width / 2 + (Math.sin(time * 2 + i * 123) * 300);
+            const by = canvas.height / 2 + 300 - ((time * (40 + i * 2) + i * 33) % 600);
+            ctx.beginPath();
+            ctx.arc(bx, by, 2 + (i % 4), 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
     ctx.restore(); // Restore from World Zoom
 
     ctx.restore();
@@ -1179,7 +1212,7 @@ function draw() {
     // Calculate base angles for gauges
     const basePressureAngle = (stormIntensity > 0 ? Math.PI / 3 : -Math.PI / 3) + ((Math.sin(time * 15) * 0.05) + (Math.sin(time * 2.3) * 0.1));
     const baseHeadingAngle = turret.angle + Math.PI / 2;
-    const baseDepthAngle = -Math.PI / 4 + Math.sin(time * 0.8) * 0.03;
+    const baseDepthAngle = -Math.PI / 4 + Math.sin(time * 0.8) * 0.03 + (submergeRatio * Math.PI); // Sweeps to MAX when diving
     const baseRpmAngle = Math.PI / 4 + (Math.sin(time * 5) * 0.02) + (Math.sin(time * 0.5) * 0.05);
 
     const gaugeCenters = {
@@ -2045,7 +2078,11 @@ canvas.addEventListener('click', (e) => {
         const bx = gaugeCenters[key].x - 40;
         const by = gaugeCenters[key].y + 80;
         if (cx >= bx && cx <= bx + 80 && cy >= by && cy <= by + 25) {
-            interactiveGauges[key].velocity = 2.0; // Give the needle a big jump
+            if (key === 'depth') {
+                isSubmerged = !isSubmerged; // Toggle Ballast dive!
+            } else {
+                interactiveGauges[key].velocity = 2.0; // Give the needle a big jump
+            }
             playSonarPing('submarine'); // A slightly different mechanical sound
             return;
         }
