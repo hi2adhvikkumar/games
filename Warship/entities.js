@@ -906,6 +906,10 @@ class Plane {
         
         // Randomize when the plane will drop its bomb during its pass
         this.bombTimer = Math.floor(Math.random() * 60) + 30;
+        
+        if (typeof playPlaneWhooshSound === 'function') {
+            playPlaneWhooshSound();
+        }
     }
 
     update() {

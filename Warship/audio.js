@@ -422,3 +422,44 @@ function playWiperSqueak() {
         console.error("Audio error:", e);
     }
 }
+
+function playPlaneWhooshSound() {
+    try {
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        
+        const now = audioCtx.currentTime;
+        const duration = 3.0; // Fast flyby duration
+        
+        // Generate white noise for the rushing air
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        // Doppler effect filter: Pitch goes up slightly, then sweeps down quickly as it passes
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.linearRampToValueAtTime(2500, now + duration * 0.3); // Approaching
+        filter.frequency.exponentialRampToValueAtTime(200, now + duration); // Passed by
+        filter.Q.value = 0.8;
+        
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.25, now + duration * 0.3); // Peak volume at closest point
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration); // Fade off in distance
+        
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        noise.start(now);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
