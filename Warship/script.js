@@ -206,6 +206,7 @@ let zoomLevel = 1.0;
 let wiperProgress = 0;
 let isSubmerged = false;
 let submergeRatio = 0;
+let dayNightPhase = 1.0;
 
 let stickyNoteState = 0;
 const stickyMessages = [
@@ -606,6 +607,9 @@ function update() {
     updateTurretAngle();
     time += 0.05; // For wave animation
 
+    // Smoothly loops from 1 (Day) to 0 (Pitch Black Night) and back
+    dayNightPhase = (Math.cos(time * 0.002) + 1) / 2;
+
     if (isSubmerged) {
         submergeRatio = Math.min(1.0, submergeRatio + 0.02);
     } else {
@@ -845,7 +849,7 @@ function draw() {
     });
 
     // Draw sun
-    ctx.fillStyle = `rgba(255, 235, 180, ${0.9 * (1 - stormIntensity)})`;
+    ctx.fillStyle = `rgba(255, 235, 180, ${0.9 * (1 - stormIntensity) * dayNightPhase})`; // Dims as night falls
     ctx.beginPath();
     ctx.arc(canvas.width * 0.75, horizonY - 45, 25, 0, Math.PI * 2);
     ctx.fill();
@@ -872,7 +876,7 @@ function draw() {
     ctx.fill();
     
     // Draw shimmering sun reflection on the water
-    ctx.fillStyle = `rgba(255, 235, 180, ${0.25 * (1 - stormIntensity)})`;
+    ctx.fillStyle = `rgba(255, 235, 180, ${0.25 * (1 - stormIntensity) * dayNightPhase})`; // Dims as night falls
     for (let i = 0; i < 20; i++) {
         const width = 100 - i * 4 + Math.sin(time * 5 + i) * 15;
         const refY = horizonY + 2 + i * 8 + Math.sin(time * 2 + i * 0.5) * 2;
@@ -949,6 +953,15 @@ function draw() {
 
     // Draw mines
     mines.forEach(mine => mine.draw());
+
+    // --- Apply Day/Night & Storm Darkness Overlay ---
+    const darknessAlpha = nightVisionEnabled ? 0 : 1.0 - dayNightPhase; // Night vision cuts through the dark!
+    const totalDarkness = Math.min(0.92, (darknessAlpha * 0.95) + (stormIntensity * 0.4));
+    
+    if (totalDarkness > 0) {
+        ctx.fillStyle = `rgba(0, 4, 10, ${totalDarkness})`; // Cool dark blue/black hue
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+    }
 
     // Draw explosions
     explosions.forEach(exp => exp.draw());
