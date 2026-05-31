@@ -1096,3 +1096,67 @@ class Bomb {
         return this.y >= this.targetY;
     }
 }
+
+class Flare {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = -18; // Shoot high up into the sky
+        this.life = 1.0;
+        this.active = false;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        
+        if (this.vy < 0) {
+            this.vy += 0.3; // Gravity slowing it down at the apex
+        } else {
+            if (!this.active) {
+                this.active = true;
+                this.vy = 0.5; // Parachute deploys, floats down slowly
+            }
+            this.life -= 0.003; // Lasts ~300 frames (5-6 seconds)
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        if (this.active) {
+            // Sizzling flare light
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 150 + Math.random() * 20);
+            glow.addColorStop(0, `rgba(255, 255, 200, ${this.life})`);
+            glow.addColorStop(0.2, `rgba(255, 150, 50, ${this.life * 0.8})`);
+            glow.addColorStop(1, 'rgba(255, 50, 0, 0)');
+            
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(0, 0, 150 + Math.random() * 20, 0, Math.PI * 2); ctx.fill();
+
+            // Small parachute
+            ctx.fillStyle = `rgba(255, 255, 255, ${this.life})`;
+            ctx.beginPath(); ctx.arc(0, -25, 12, Math.PI, 0); ctx.fill();
+            
+            ctx.strokeStyle = `rgba(255, 255, 255, ${this.life})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(-12, -25); ctx.lineTo(0, 0); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12, -25); ctx.lineTo(0, 0); ctx.stroke();
+
+            // Burning core
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(-2, 0, 4, 6);
+            ctx.fillStyle = '#ff5500'; ctx.fillRect(-2, 6, 4, 4);
+        } else {
+            // Shooting up tracer
+            ctx.fillStyle = '#ffaa00'; ctx.fillRect(-2, -5, 4, 15);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -5, 2, 8);
+        }
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.life <= 0 || (this.active && this.y > horizonY);
+    }
+}

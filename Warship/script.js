@@ -194,6 +194,7 @@ let mines = [];
 let clouds = [];
 let planes = [];
 let bombs = [];
+let flares = [];
 let splashes = [];
 let glassCracks = [];
 let stormIntensity = 0;
@@ -207,6 +208,7 @@ let wiperProgress = 0;
 let isSubmerged = false;
 let submergeRatio = 0;
 let dayNightPhase = 1.0;
+let maxFlareLight = 0;
 
 let stickyNoteState = 0;
 const stickyMessages = [
@@ -610,6 +612,14 @@ function update() {
     // Smoothly loops from 1 (Day) to 0 (Pitch Black Night) and back
     dayNightPhase = (Math.cos(time * 0.002) + 1) / 2;
 
+    maxFlareLight = 0;
+    flares.forEach(flare => {
+        flare.update();
+        // Calculate illumination intensity if the flare is popped
+        if (flare.active) maxFlareLight = Math.max(maxFlareLight, Math.min(1.0, flare.life * 1.5));
+    });
+    flares = flares.filter(flare => !flare.isDead());
+
     if (isSubmerged) {
         submergeRatio = Math.min(1.0, submergeRatio + 0.02);
     } else {
@@ -955,13 +965,16 @@ function draw() {
     mines.forEach(mine => mine.draw());
 
     // --- Apply Day/Night & Storm Darkness Overlay ---
-    const darknessAlpha = nightVisionEnabled ? 0 : 1.0 - dayNightPhase; // Night vision cuts through the dark!
+    const darknessAlpha = nightVisionEnabled ? 0 : Math.max(0, 1.0 - dayNightPhase - maxFlareLight); // Flares and Night vision cut through the dark!
     const totalDarkness = Math.min(0.92, (darknessAlpha * 0.95) + (stormIntensity * 0.4));
     
     if (totalDarkness > 0) {
         ctx.fillStyle = `rgba(0, 4, 10, ${totalDarkness})`; // Cool dark blue/black hue
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
+
+    // Draw flares (Illuminates the scene from above, drawn after darkness)
+    flares.forEach(flare => flare.draw());
 
     // Draw explosions
     explosions.forEach(exp => exp.draw());
@@ -1281,6 +1294,27 @@ function draw() {
         ctx.fillText(buttonLabels[key], center.x, by + 12.5);
     }
     
+    // Draw Flare Button
+    const flareBtnX = cx - 575; // Symmetric to wiper button
+    const flareBtnY = cy + 380;
+    ctx.fillStyle = nightVisionEnabled ? '#003300' : '#8a6327';
+    ctx.fillRect(flareBtnX, flareBtnY, 80, 30);
+    
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(flareBtnX, flareBtnY, 80, 5);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(flareBtnX, flareBtnY + 25, 80, 5);
+    
+    ctx.strokeStyle = nightVisionEnabled ? '#00ff00' : '#111';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(flareBtnX, flareBtnY, 80, 30);
+    
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#111';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("FLARE(∞)", flareBtnX + 40, flareBtnY + 15);
+
     // Draw Wiper Button
     const wiperX = cx + 495; // Aligned with the START button above it
     const wiperY = cy + 380; // Placed far under the START button
@@ -2109,6 +2143,19 @@ canvas.addEventListener('click', (e) => {
             wiperProgress = 0.01; // Start the wipe animation!
             playSonarPing('submarine'); // Mechanical sound
             playWiperSqueak(); // Play squeak on the forward sweep!
+        }
+        return;
+    }
+
+    // Check if Flare Button was clicked
+    const flareBtnX = cxCenter - 575;
+    const flareBtnY = cyCenter + 380;
+    if (cx >= flareBtnX && cx <= flareBtnX + 80 && cy >= flareBtnY && cy <= flareBtnY + 30) {
+        if (!isSubmerged) {
+            flares.push(new Flare(turret.x, turret.y));
+            playShootSound(); 
+        } else {
+            playSonarPing('ship'); // Error/empty click if submerged
         }
         return;
     }
