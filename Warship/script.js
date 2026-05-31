@@ -106,11 +106,32 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('wheel', (e) => {
     if (!gameStarted || isMenuOpen || isUpgradesOpen) return;
-    // Scroll up to zoom in, scroll down to zoom out
-    if (e.deltaY < 0) zoomLevel += 0.15;
-    else if (e.deltaY > 0) zoomLevel -= 0.15;
-    if (zoomLevel < 1.0) zoomLevel = 1.0;
-    if (zoomLevel > 3.0) zoomLevel = 3.0; // Limit maximum zoom
+    
+    const rect = canvas.getBoundingClientRect();
+    const cxCenter = canvas.width / 2;
+    const cyCenter = canvas.height / 2;
+    const cxPhysical = e.clientX - rect.left;
+    const cyPhysical = e.clientY - rect.top;
+    const cx = (cxPhysical - cxCenter) / globalZoomLevel + cxCenter;
+    const cy = (cyPhysical - cyCenter) / globalZoomLevel + cyCenter;
+    
+    const dx = cx - cxCenter;
+    const dy = cy - cyCenter;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= 300) {
+        // Scroll up to zoom in, scroll down to zoom out
+        if (e.deltaY < 0) zoomLevel += 0.15;
+        else if (e.deltaY > 0) zoomLevel -= 0.15;
+        if (zoomLevel < 1.0) zoomLevel = 1.0;
+        if (zoomLevel > 3.0) zoomLevel = 3.0; // Limit maximum zoom
+    } else {
+        // Scroll outside the view zooms the entire screen
+        if (e.deltaY < 0) globalZoomLevel += 0.15;
+        else if (e.deltaY > 0) globalZoomLevel -= 0.15;
+        if (globalZoomLevel < 0.5) globalZoomLevel = 0.5;
+        if (globalZoomLevel > 2.0) globalZoomLevel = 2.0;
+    }
 });
 
 const addBossBtn = () => {
@@ -204,6 +225,7 @@ let raindrops = [];
 let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
+let globalZoomLevel = 1.0;
 let wiperProgress = 0;
 let isSubmerged = false;
 let submergeRatio = 0;
@@ -244,9 +266,11 @@ const viewBottom = canvas.height / 2 + 300;
 function updateTurretAngle() {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
+    const gMouseX = (mouseX - cx) / globalZoomLevel + cx;
+    const gMouseY = (mouseY - cy) / globalZoomLevel + cy;
     // Inverse transform the mouse coordinates back to the world space accounting for zoom
-    const worldMouseX = (mouseX - cx) / zoomLevel + cx;
-    const worldMouseY = (mouseY - cy) / zoomLevel + cy;
+    const worldMouseX = (gMouseX - cx) / zoomLevel + cx;
+    const worldMouseY = (gMouseY - cy) / zoomLevel + cy;
     
     const dx = worldMouseX - turret.x;
     const dy = worldMouseY - turret.y;
@@ -815,6 +839,12 @@ function lerpColor(c1, c2, factor) {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    ctx.save();
+    // Apply Global Zoom
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(globalZoomLevel, globalZoomLevel);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
     // Apply Screen Shake
     ctx.save();
     if (shakeIntensity > 0) {
@@ -1261,8 +1291,12 @@ function draw() {
     if (draggedGauge) {
         const center = gaugeCenters[draggedGauge];
         const g = interactiveGauges[draggedGauge];
-        const dx = mouseX - center.x;
-        const dy = mouseY - center.y;
+        const cxCenter = canvas.width / 2;
+        const cyCenter = canvas.height / 2;
+        const gMouseX = (mouseX - cxCenter) / globalZoomLevel + cxCenter;
+        const gMouseY = (mouseY - cyCenter) / globalZoomLevel + cyCenter;
+        const dx = gMouseX - center.x;
+        const dy = gMouseY - center.y;
         const dragAngle = Math.atan2(dy, dx);
         
         let angleDiff = dragAngle - center.base;
@@ -2026,10 +2060,14 @@ function draw() {
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(mouseX - 10, mouseY);
-    ctx.lineTo(mouseX + 10, mouseY);
-    ctx.moveTo(mouseX, mouseY - 10);
-    ctx.lineTo(mouseX, mouseY + 10);
+    const cxCenter2 = canvas.width / 2;
+    const cyCenter2 = canvas.height / 2;
+    const gMouseX2 = (mouseX - cxCenter2) / globalZoomLevel + cxCenter2;
+    const gMouseY2 = (mouseY - cyCenter2) / globalZoomLevel + cyCenter2;
+    ctx.moveTo(gMouseX2 - 10, gMouseY2);
+    ctx.lineTo(gMouseX2 + 10, gMouseY2);
+    ctx.moveTo(gMouseX2, gMouseY2 - 10);
+    ctx.lineTo(gMouseX2, gMouseY2 + 10);
     ctx.stroke();
 
     // Draw Switch Weapon button
@@ -2062,21 +2100,28 @@ function draw() {
     ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2);
 
     ctx.restore(); // Restore from Screen Shake
+    ctx.restore(); // Restore from Global Zoom
 }
 
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    mouseX = (e.clientX - rect.left) * scaleX;
+    mouseY = (e.clientY - rect.top) * scaleY;
 });
 
 canvas.addEventListener('mousedown', (e) => {
     initAudio();
     const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const cxCenter = canvas.width / 2;
     const cyCenter = canvas.height / 2;
+    const cxPhysical = (e.clientX - rect.left) * scaleX;
+    const cyPhysical = (e.clientY - rect.top) * scaleY;
+    const clickX = (cxPhysical - cxCenter) / globalZoomLevel + cxCenter;
+    const clickY = (cyPhysical - cyCenter) / globalZoomLevel + cyCenter;
     
     const centers = {
         pressure: { x: cxCenter - 535, y: cyCenter - 220 },
@@ -2109,12 +2154,16 @@ canvas.addEventListener('click', (e) => {
     initAudio(); // Initialize audio context on first user interaction
 
     const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-
-    // Check if clicked on a gauge (tap the glass effect)
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const cxCenter = canvas.width / 2;
     const cyCenter = canvas.height / 2;
+    const cxPhysical = (e.clientX - rect.left) * scaleX;
+    const cyPhysical = (e.clientY - rect.top) * scaleY;
+    const cx = (cxPhysical - cxCenter) / globalZoomLevel + cxCenter;
+    const cy = (cyPhysical - cyCenter) / globalZoomLevel + cyCenter;
+
+    // Check if clicked on a gauge (tap the glass effect)
     const gaugeCenters = {
         pressure: { x: cxCenter - 535, y: cyCenter - 220 },
         heading:  { x: cxCenter + 535, y: cyCenter - 220 },
