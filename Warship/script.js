@@ -956,7 +956,9 @@ function draw() {
     bombs.forEach(bomb => bomb.draw());
 
     // Draw ships
-    ships.forEach(ship => ship.draw());
+    ships.forEach(ship => {
+        if (ship.type !== 'submarine') ship.draw();
+    });
 
     // Draw crates
     crates.forEach(crate => crate.draw());
@@ -991,12 +993,6 @@ function draw() {
         ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
 
-    // Apply Night Vision green tint over the periscope
-    if (nightVisionEnabled) {
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
-    }
-
     // Apply Underwater Submerge overlay
     if (submergeRatio > 0) {
         ctx.fillStyle = `rgba(0, 5, 15, ${submergeRatio * 0.95})`; // Very dark, but you can just barely see through it!
@@ -1011,6 +1007,19 @@ function draw() {
             ctx.arc(bx, by, 2 + (i % 4), 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+
+    // Draw submarines over the dark water so you can see them while submerged!
+    ships.forEach(ship => {
+        if (ship.type === 'submarine') {
+            ship.draw();
+        }
+    });
+
+    // Apply Night Vision green tint over the periscope
+    if (nightVisionEnabled) {
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
+        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
     }
 
     ctx.restore(); // Restore from World Zoom

@@ -167,7 +167,8 @@ class Ship {
     draw() {
         ctx.save();
         if (this.type === 'submarine') {
-            ctx.globalAlpha = 0.25; // Active camouflage to make them hard to see in the view
+            const currentSubmerge = typeof submergeRatio !== 'undefined' ? submergeRatio : 0;
+            ctx.globalAlpha = 0.25 + (currentSubmerge * 0.75); // Fades into full visibility when submerged!
         }
 
         // Calculate bobbing offset to exactly match the ocean horizon waves
