@@ -6,6 +6,7 @@ const radarCountElement = document.getElementById('radar-count');
 // Increase canvas size to fill the window so nothing gets cut off!
 document.body.style.margin = '0';
 document.body.style.overflow = 'hidden';
+document.body.style.backgroundColor = '#000';
 canvas.style.display = 'block';
 
 canvas.width = window.innerWidth || 1200;
@@ -102,6 +103,19 @@ window.addEventListener('keydown', (e) => {
             shoot();
         }
     }
+});
+
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth || 1200;
+    canvas.height = window.innerHeight || 800;
+    horizonY = canvas.height / 2;
+    viewLeft = canvas.width / 2 - 300;
+    viewRight = canvas.width / 2 + 300;
+    viewTop = canvas.height / 2 - 300;
+    viewBottom = canvas.height / 2 + 300;
+    turret.x = canvas.width / 2;
+    turret.y = canvas.height / 2 + 300;
+    globalZoomLevel = Math.min(1.0, canvas.width / 1200, canvas.height / 800);
 });
 
 window.addEventListener('wheel', (e) => {
@@ -225,7 +239,7 @@ let raindrops = [];
 let rainMultiplier = 1.0;
 let targetRainMultiplier = 1.0;
 let zoomLevel = 1.0;
-let globalZoomLevel = 1.0;
+let globalZoomLevel = Math.min(1.0, canvas.width / 1200, canvas.height / 800);
 let wiperProgress = 0;
 let isSubmerged = false;
 let submergeRatio = 0;
@@ -249,19 +263,19 @@ let draggedGauge = null;
 
 for (let i = 0; i < 6; i++) {
     clouds.push({
-        x: Math.random() * 800,
-        y: Math.random() * 200 + 50,
+        x: canvas.width / 2 - 400 + Math.random() * 800,
+        y: canvas.height / 2 - 300 + Math.random() * 200,
         speed: Math.random() * 0.2 + 0.05,
         scale: Math.random() * 0.6 + 0.3
     });
 }
 
-const horizonY = canvas.height / 2; // Horizon in the middle of view
+let horizonY = canvas.height / 2; // Horizon in the middle of view
 
-const viewLeft = canvas.width / 2 - 300;
-const viewRight = canvas.width / 2 + 300;
-const viewTop = canvas.height / 2 - 300;
-const viewBottom = canvas.height / 2 + 300;
+let viewLeft = canvas.width / 2 - 300;
+let viewRight = canvas.width / 2 + 300;
+let viewTop = canvas.height / 2 - 300;
+let viewBottom = canvas.height / 2 + 300;
 
 function updateTurretAngle() {
     const cx = canvas.width / 2;
@@ -755,7 +769,7 @@ function update() {
 
     clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
-        if (cloud.x < -100) cloud.x = canvas.width + 100;
+        if (cloud.x < canvas.width / 2 - 400) cloud.x = canvas.width / 2 + 400;
     });
 
     // Weather logic
@@ -845,6 +859,14 @@ function draw() {
     ctx.scale(globalZoomLevel, globalZoomLevel);
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
+    // Calculate the TRUE logical bounds of the screen factoring in the global zoom
+    const vW = canvas.width / globalZoomLevel;
+    const vH = canvas.height / globalZoomLevel;
+    const vLeft = canvas.width / 2 - vW / 2;
+    const vTop = canvas.height / 2 - vH / 2;
+    const vRight = vLeft + vW;
+    const vBottom = vTop + vH;
+
     // Apply Screen Shake
     ctx.save();
     if (shakeIntensity > 0) {
@@ -866,11 +888,11 @@ function draw() {
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
     // Draw sky with gradient
-    const skyGradient = ctx.createLinearGradient(0, 0, 0, horizonY);
+    const skyGradient = ctx.createLinearGradient(0, canvas.height / 2 - 400, 0, horizonY);
     skyGradient.addColorStop(0, lerpColor('#2b5a8c', '#1a1a24', stormIntensity));
     skyGradient.addColorStop(1, lerpColor('#87ceeb', '#4a5a6a', stormIntensity));
     ctx.fillStyle = skyGradient;
-    ctx.fillRect(0, 0, canvas.width, horizonY);
+    ctx.fillRect(canvas.width / 2 - 400, canvas.height / 2 - 400, 800, 400);
 
     // Draw drifting clouds
     const cloudTint = Math.floor(255 - 100 * stormIntensity);
@@ -891,7 +913,7 @@ function draw() {
     // Draw sun
     ctx.fillStyle = `rgba(255, 235, 180, ${0.9 * (1 - stormIntensity) * dayNightPhase})`; // Dims as night falls
     ctx.beginPath();
-    ctx.arc(canvas.width * 0.75, horizonY - 45, 25, 0, Math.PI * 2);
+    ctx.arc(canvas.width / 2 + 150, horizonY - 45, 25, 0, Math.PI * 2);
     ctx.fill();
 
     // Draw horizon with stronger bumps and fill the water beneath it
@@ -899,17 +921,17 @@ function draw() {
     ctx.lineWidth = 1;
     const horizonOffset = Math.sin(time * 0.8) * 2.4;
     ctx.beginPath();
-    ctx.moveTo(0, horizonY + horizonOffset);
-    for (let x = 10; x <= canvas.width; x += 10) {
+    ctx.moveTo(canvas.width / 2 - 400, horizonY + horizonOffset);
+    for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 10) {
         const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         ctx.lineTo(x, y);
     }
-    ctx.lineTo(canvas.width, canvas.height);
-    ctx.lineTo(0, canvas.height);
+    ctx.lineTo(canvas.width / 2 + 400, canvas.height / 2 + 400);
+    ctx.lineTo(canvas.width / 2 - 400, canvas.height / 2 + 400);
     ctx.closePath();
     
     // Add depth gradient to the water
-    const waterGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height);
+    const waterGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height / 2 + 400);
     waterGradient.addColorStop(0, lerpColor('#1c4d7c', '#0e263e', stormIntensity)); 
     waterGradient.addColorStop(1, lerpColor('#001122', '#000408', stormIntensity)); 
     ctx.fillStyle = waterGradient;
@@ -920,7 +942,7 @@ function draw() {
     for (let i = 0; i < 20; i++) {
         const width = 100 - i * 4 + Math.sin(time * 5 + i) * 15;
         const refY = horizonY + 2 + i * 8 + Math.sin(time * 2 + i * 0.5) * 2;
-        ctx.fillRect(canvas.width * 0.75 - width / 2, refY, width, 3);
+        ctx.fillRect(canvas.width / 2 + 150 - width / 2, refY, width, 3);
     }
 
     // Add a few large curved darker patches across the ocean (with perspective)
@@ -929,7 +951,7 @@ function draw() {
     for (let i = 0; i < 5; i++) {
         const depthFactor = i * 20 + (i * i) * 8; // Perspective scaling
         const baseY = horizonY + 30 + depthFactor;
-        const startX = 60 + i * 110;
+        const startX = (canvas.width / 2 - 250) + i * 110;
         const endX = startX + 170 + i * 50; // Get wider as they get closer
         const controlX = startX + (endX - startX) / 2;
         const controlY = baseY + Math.sin(time * 0.45 + i) * (12 + i * 3) + 8;
@@ -957,10 +979,10 @@ function draw() {
         ctx.setLineDash([80 + i * 15, 60 + i * 10]);
         ctx.lineDashOffset = -(time * (10 + i * 2) + i * 25); // Move them left over time
         
-        for (let x = 0; x <= canvas.width; x += 20) {
+        for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 20) {
             const waveAmplitude = (2 + i * 0.5);
             const waveY = waveBaseY + Math.sin((x * 0.04) + time * 1.5 + i) * waveAmplitude + Math.cos((x * 0.02) + time * 0.8) * (waveAmplitude * 0.6);
-            if (x === 0) {
+            if (x === canvas.width / 2 - 400) {
                 ctx.moveTo(x, waveY);
             } else {
                 ctx.lineTo(x, waveY);
@@ -972,8 +994,8 @@ function draw() {
 
     // Draw the horizon outline over the filled water
     ctx.beginPath();
-    ctx.moveTo(0, horizonY + horizonOffset);
-    for (let x = 10; x <= canvas.width; x += 10) {
+    ctx.moveTo(canvas.width / 2 - 400, horizonY + horizonOffset);
+    for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 10) {
         const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         ctx.lineTo(x, y);
     }
@@ -1002,7 +1024,7 @@ function draw() {
     
     if (totalDarkness > 0) {
         ctx.fillStyle = `rgba(0, 4, 10, ${totalDarkness})`; // Cool dark blue/black hue
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
     }
 
     // Draw flares (Illuminates the scene from above, drawn after darkness)
@@ -1020,13 +1042,13 @@ function draw() {
     // Draw lightning flash (illuminates the entire periscope view)
     if (lightningFlash > 0) {
         ctx.fillStyle = `rgba(255, 255, 255, ${lightningFlash * 0.8})`;
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
     }
 
     // Apply Underwater Submerge overlay
     if (submergeRatio > 0) {
         ctx.fillStyle = `rgba(0, 5, 15, ${submergeRatio * 0.95})`; // Very dark, but you can just barely see through it!
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
         
         // Draw rising bubbles
         ctx.fillStyle = `rgba(255, 255, 255, ${submergeRatio * 0.25})`; // Slightly more visible bubbles
@@ -1049,7 +1071,7 @@ function draw() {
     // Apply Night Vision green tint over the periscope
     if (nightVisionEnabled) {
         ctx.fillStyle = 'rgba(0, 255, 0, 0.35)'; // Classic night vision green
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
     }
 
     ctx.restore(); // Restore from World Zoom
@@ -1073,12 +1095,12 @@ function draw() {
     // Clip to everything outside the periscope circle to draw the cockpit
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-50, -50, canvas.width + 100, canvas.height + 100);
+    ctx.rect(vLeft - 10, vTop - 10, vW + 20, vH + 20);
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2, true);
     ctx.clip();
 
     // 1. Metal Panel Background
-    const metalGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    const metalGrad = ctx.createLinearGradient(0, vTop, 0, vBottom);
     if (nightVisionEnabled) {
         metalGrad.addColorStop(0, '#002200');
         metalGrad.addColorStop(1, '#000a00');
@@ -1087,7 +1109,7 @@ function draw() {
         metalGrad.addColorStop(1, '#1a1e20');
     }
     ctx.fillStyle = metalGrad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(vLeft, vTop, vW, vH);
 
     // 2. Rusty Seams
     ctx.strokeStyle = nightVisionEnabled ? '#001100' : '#111';
@@ -1097,18 +1119,18 @@ function draw() {
 
     // --- Uneven Scrap Metal Panels ---
     ctx.beginPath();
-    let currentY = -100;
+    let currentY = vTop - 100;
     let rowIndex = 0;
     
-    while (currentY < canvas.height + 200) {
+    while (currentY < vBottom + 200) {
         let rowHeight = 90 + Math.abs(Math.sin(rowIndex * 7.4)) * 140; // Height varies between 90 and 230
         
-        ctx.moveTo(0, currentY);
-        ctx.lineTo(canvas.width, currentY);
+        ctx.moveTo(vLeft, currentY);
+        ctx.lineTo(vRight, currentY);
         
-        let currentX = -100;
+        let currentX = vLeft - 100;
         let colIndex = 0;
-        while (currentX < canvas.width + 200) {
+        while (currentX < vRight + 200) {
             let panelWidth = 120 + Math.abs(Math.cos(rowIndex * 3.2 + colIndex * 5.1)) * 280; // Width varies between 120 and 400
             
             ctx.moveTo(currentX, currentY);
@@ -1130,14 +1152,14 @@ function draw() {
     };
 
     // Draw rivets along the uneven seams
-    currentY = -100;
+    currentY = vTop - 100;
     rowIndex = 0;
-    while (currentY < canvas.height + 200) {
+    while (currentY < vBottom + 200) {
         let rowHeight = 90 + Math.abs(Math.sin(rowIndex * 7.4)) * 140;
         
-        let currentX = -100;
+        let currentX = vLeft - 100;
         let colIndex = 0;
-        while (currentX < canvas.width + 200) {
+        while (currentX < vRight + 200) {
             let panelWidth = 120 + Math.abs(Math.cos(rowIndex * 3.2 + colIndex * 5.1)) * 280;
             
             for (let dx = 30; dx < panelWidth - 10; dx += 50) {
@@ -1158,10 +1180,10 @@ function draw() {
 
     // --- Non-rotated Framing & Corner Seams ---
     ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(cx - 250, cy - 250);
-    ctx.moveTo(canvas.width, 0); ctx.lineTo(cx + 250, cy - 250);
-    ctx.moveTo(0, canvas.height); ctx.lineTo(cx - 250, cy + 250);
-    ctx.moveTo(canvas.width, canvas.height); ctx.lineTo(cx + 250, cy + 250);
+    ctx.moveTo(vLeft, vTop); ctx.lineTo(cx - 250, cy - 250);
+    ctx.moveTo(vRight, vTop); ctx.lineTo(cx + 250, cy - 250);
+    ctx.moveTo(vLeft, vBottom); ctx.lineTo(cx - 250, cy + 250);
+    ctx.moveTo(vRight, vBottom); ctx.lineTo(cx + 250, cy + 250);
     // Framing around periscope
     ctx.rect(cx - 340, cy - 340, 680, 680);
     ctx.stroke();
@@ -1818,16 +1840,16 @@ function draw() {
         ctx.save();
         const patternIdx = Math.floor(Date.now() / 50) % noisePatterns.length; // Rapidly cycle through noise frames
         ctx.fillStyle = noisePatterns[patternIdx];
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(vLeft, vTop, vW, vH);
         
         // Add occasional vertical scratches (like old film)
         if (Math.random() < 0.4) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.fillRect(Math.random() * canvas.width, 0, Math.random() * 3 + 1, canvas.height);
+            ctx.fillRect(vLeft + Math.random() * vW, vTop, Math.random() * 3 + 1, vH);
         }
         if (Math.random() < 0.2) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.fillRect(Math.random() * canvas.width, 0, Math.random() * 2 + 1, canvas.height);
+            ctx.fillRect(vLeft + Math.random() * vW, vTop, Math.random() * 2 + 1, vH);
         }
         ctx.restore();
     }
@@ -1859,7 +1881,7 @@ function draw() {
     if (isMenuOpen) {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
         ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
@@ -1926,7 +1948,7 @@ function draw() {
     if (isUpgradesOpen) {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+        ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
         ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 260, 500, 520);
