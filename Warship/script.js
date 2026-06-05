@@ -92,6 +92,8 @@ window.addEventListener('keydown', (e) => {
     if (e.key && (e.key === 'Escape' || e.key.toLowerCase() === 'p')) {
         if (isUpgradesOpen) {
             isUpgradesOpen = false; // Close upgrades if it's open
+        } else if (isShipTypesOpen && gameStarted) {
+            isShipTypesOpen = false; // Close ship types if it's open
         } else {
             isMenuOpen = !isMenuOpen; // Otherwise toggle the pause menu
         }
@@ -99,7 +101,7 @@ window.addEventListener('keydown', (e) => {
     // Spacebar to shoot
     if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault(); // Prevent the page from scrolling down
-        if (!justStarted && !isMenuOpen && !isUpgradesOpen) {
+        if (!justStarted && !isMenuOpen && !isUpgradesOpen && !isShipTypesOpen) {
             shoot();
         }
     }
@@ -119,7 +121,7 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('wheel', (e) => {
-    if (!gameStarted || isMenuOpen || isUpgradesOpen) return;
+    if (!gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen) return;
     
     const rect = canvas.getBoundingClientRect();
     const cxCenter = canvas.width / 2;
@@ -203,6 +205,7 @@ let homingAmmo = 0;
 let isMenuOpen = false;
 let isUpgradesOpen = false;
 let gameStarted = false;
+let isShipTypesOpen = false;
 let nightVisionEnabled = false;
 let blackAndWhiteEnabled = false;
 let shakeIntensity = 0;
@@ -1884,10 +1887,10 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 345);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 345);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
@@ -1922,8 +1925,19 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText('Upgrades', canvas.width / 2, upgMenuBtnY + nvBtnH / 2);
 
+        // Draw Ship Types Button
+        const shipTypesBtnY = canvas.height / 2 + 30;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, shipTypesBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, shipTypesBtnY, nvBtnW, nvBtnH);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText('Ship Types', canvas.width / 2, shipTypesBtnY + nvBtnH / 2);
+
         // Draw Black and White Theme Button
-        const bwBtnY = canvas.height / 2 + 30;
+        const bwBtnY = canvas.height / 2 + 75;
         ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -1933,7 +1947,7 @@ function draw() {
         ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
 
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 75;
+        const closeMenuBtnY = canvas.height / 2 + 120;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -1941,6 +1955,63 @@ function draw() {
         ctx.fillStyle = '#00ff00';
         ctx.font = '16px monospace';
         ctx.fillText('Close Menu', canvas.width / 2, closeMenuBtnY + nvBtnH / 2);
+        ctx.restore();
+    }
+
+    // Draw Ship Types overlay if open
+    if (isShipTypesOpen && gameStarted) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(vLeft, vTop, vW, vH);
+        
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.95)';
+        ctx.fillRect(canvas.width / 2 - 300, canvas.height / 2 - 250, 600, 500);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 300, canvas.height / 2 - 250, 600, 500);
+
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 30px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('SHIP TYPES', canvas.width / 2, canvas.height / 2 - 210);
+
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'left';
+        const startX = canvas.width / 2 - 270;
+        let startY = canvas.height / 2 - 150;
+
+        const shipInfo = [
+            "Normal: Standard ship, 1 HP. Speed varies.",
+            "Battleship: Slower, larger, takes 3 hits.",
+            "PT Boat: Very fast, small, takes 1 hit.",
+            "Submarine: Can dive to dodge shots, 1 HP.",
+            "Aircraft Carrier: Launches enemy planes, 5 HP.",
+            "Civilian: Hospital ship, DO NOT SHOOT! (-20 pts).",
+            "Dreadnought: Mini-boss, 9 HP.",
+            "Juggernaut: Massive Super Boss, 15 HP."
+        ];
+
+        shipInfo.forEach(info => {
+            ctx.fillText(info, startX, startY);
+            startY += 40;
+        });
+
+        // Close button
+        const closeW = 200;
+        const closeH = 40;
+        const closeX = canvas.width / 2 - closeW / 2;
+        const closeY = canvas.height / 2 + 180;
+
+        ctx.fillStyle = 'rgba(0, 100, 0, 0.8)';
+        ctx.fillRect(closeX, closeY, closeW, closeH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(closeX, closeY, closeW, closeH);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('CLOSE', canvas.width / 2, closeY + closeH / 2);
         ctx.restore();
     }
 
@@ -2258,6 +2329,7 @@ canvas.addEventListener('click', (e) => {
         if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
+            gameStarted = true;
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
             for (let i = 0; i < 4; i++) {
@@ -2265,9 +2337,21 @@ canvas.addEventListener('click', (e) => {
                 s.x = canvas.width / 2 + (Math.random() * 400) - 200;
                 ships.push(s);
             }
+            gameStarted = true;
         }
-        gameStarted = true;
         return;
+    }
+
+    if (isShipTypesOpen && gameStarted) {
+        const closeW = 200;
+        const closeH = 40;
+        const closeX = canvas.width / 2 - closeW / 2;
+        const closeY = canvas.height / 2 + 180;
+        if (cx >= closeX && cx <= closeX + closeW && cy >= closeY && cy <= closeY + closeH) {
+            isShipTypesOpen = false;
+            playSonarPing('ship');
+        }
+        return; // Prevent clicking through
     }
 
     // Check if the hamburger menu button was clicked to toggle the menu
@@ -2275,7 +2359,10 @@ canvas.addEventListener('click', (e) => {
     const menuY = canvas.height / 2 + 180;
     if (cx >= menuX && cx <= menuX + 140 && cy >= menuY && cy <= menuY + 45) {
         isMenuOpen = !isMenuOpen;
-        if (isMenuOpen) isUpgradesOpen = false; // Close upgrades if menu opens
+        if (isMenuOpen) {
+            isUpgradesOpen = false; // Close upgrades if menu opens
+            isShipTypesOpen = false;
+        }
         return;
     }
 
@@ -2370,7 +2457,13 @@ canvas.addEventListener('click', (e) => {
             isMenuOpen = false;
         }
         
-        const bwBtnY = canvas.height / 2 + 30;
+        const shipTypesBtnY = canvas.height / 2 + 30;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= shipTypesBtnY && cy <= shipTypesBtnY + nvBtnH) {
+            isShipTypesOpen = true;
+            isMenuOpen = false;
+        }
+
+        const bwBtnY = canvas.height / 2 + 75;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= bwBtnY && cy <= bwBtnY + nvBtnH) {
             blackAndWhiteEnabled = !blackAndWhiteEnabled;
             canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
@@ -2381,7 +2474,7 @@ canvas.addEventListener('click', (e) => {
         }
         
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 75;
+        const closeMenuBtnY = canvas.height / 2 + 120;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }
@@ -2443,7 +2536,7 @@ function gameLoop() {
         return;
     }
 
-    if (!isMenuOpen && !isUpgradesOpen) {
+    if (!isMenuOpen && !isUpgradesOpen && !isShipTypesOpen) {
         update();
     }
     draw();
