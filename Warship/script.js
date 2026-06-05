@@ -86,6 +86,21 @@ window.addEventListener('keydown', (e) => {
             bossBtnHtml.style.backgroundColor = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(150, 40, 40, 0.9)';
         }
     }
+        // Save progress shortcut 'T'
+        if (e.key && e.key.toLowerCase() === 't') {
+            const saveData = {
+                score, highScore, credits, projSpeedBonus, ammoBonus, 
+                radarBonus, homingBonus, tripleAmmo, homingAmmo, 
+                weaponType, nextBossScore, nextJuggernautScore
+            };
+            localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
+            playSonarPing('ship'); // Audio feedback
+            if (typeof stickyMessages !== 'undefined') {
+                stickyMessages[0] = "PROGRESS\nSAVED!";
+                stickyNoteState = 0;
+            }
+            saveMessageTimer = 120; // Show saved message for 2 seconds
+        }
     // Cheat code 'X' to instantly spawn the Boss (Dreadnought)
     if (e.key && e.key.toLowerCase() === 'x') {
         spawnDreadnoughtPending = true;
@@ -227,6 +242,26 @@ let spawnDreadnoughtPending = false;
 let spawnJuggernautPending = false; 
 let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
+let saveMessageTimer = 0;
+
+// Load saved data if it exists
+try {
+    const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
+    if (savedData) {
+        score = savedData.score || 0;
+        highScore = savedData.highScore || highScore;
+        credits = savedData.credits || 0;
+        projSpeedBonus = savedData.projSpeedBonus || 0;
+        ammoBonus = savedData.ammoBonus || 0;
+        radarBonus = savedData.radarBonus || 0;
+        homingBonus = savedData.homingBonus || 0;
+        tripleAmmo = savedData.tripleAmmo || 40;
+        homingAmmo = savedData.homingAmmo || 0;
+        weaponType = savedData.weaponType || 'single';
+        nextBossScore = savedData.nextBossScore || 20;
+        nextJuggernautScore = savedData.nextJuggernautScore || 100;
+    }
+} catch(e) {}
 
 const turret = {
     x: canvas.width / 2,
@@ -708,6 +743,9 @@ function update() {
     }
     if (juggernautWarningTimer > 0) {
         juggernautWarningTimer--;
+    }
+    if (saveMessageTimer > 0) {
+        saveMessageTimer--;
     }
 
     let activeProjectiles = [];
@@ -1485,6 +1523,19 @@ function draw() {
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Draw Progress Saved Message
+    if (saveMessageTimer > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgba(0, 255, 0, ${Math.min(1, saveMessageTimer / 30)})`;
+        ctx.font = 'bold 36px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 10;
+        ctx.fillText('PROGRESS SAVED!', canvas.width / 2, canvas.height / 2 - 100);
+        ctx.restore();
+    }
+
     // --- Draw Cracked Glass Overlay ---
     ctx.save();
     ctx.beginPath();
@@ -1897,10 +1948,10 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 345);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 345);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
@@ -1946,8 +1997,18 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText('Ship Types', canvas.width / 2, shipTypesBtnY + nvBtnH / 2);
 
+        // Draw Tutorial Button
+        const tutorialBtnY = canvas.height / 2 + 75;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, tutorialBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, tutorialBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText('How to Play', canvas.width / 2, tutorialBtnY + nvBtnH / 2);
+
         // Draw Black and White Theme Button
-        const bwBtnY = canvas.height / 2 + 75;
+        const bwBtnY = canvas.height / 2 + 120;
         ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -1956,8 +2017,18 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
 
+        // Draw Reset Progress Button
+        const resetBtnY = canvas.height / 2 + 165;
+        ctx.fillStyle = 'rgba(100, 0, 0, 0.8)';
+        ctx.fillRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#ff0000';
+        ctx.strokeRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = '#ff0000';
+        ctx.font = '16px monospace';
+        ctx.fillText('Reset Progress', canvas.width / 2, resetBtnY + nvBtnH / 2);
+
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 120;
+        const closeMenuBtnY = canvas.height / 2 + 210;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -2349,10 +2420,18 @@ canvas.addEventListener('click', (e) => {
         const bossBtnX = canvas.width / 2 - bossBtnW / 2;
         const bossBtnY = canvas.height / 2 + 10;
         
+        const tutBtnW = 280;
+        const tutBtnH = 40;
+        const tutBtnX = canvas.width / 2 - tutBtnW / 2;
+        const tutBtnY = canvas.height / 2 + 80;
+
         if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
             gameStarted = true;
+        } else if (cx >= tutBtnX && cx <= tutBtnX + tutBtnW && cy >= tutBtnY && cy <= tutBtnY + tutBtnH) {
+            isTutorialOpen = true;
+            playSonarPing('ship');
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
             for (let i = 0; i < 4; i++) {
@@ -2486,7 +2565,13 @@ canvas.addEventListener('click', (e) => {
             isMenuOpen = false;
         }
 
-        const bwBtnY = canvas.height / 2 + 75;
+        const tutorialBtnY = canvas.height / 2 + 75;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= tutorialBtnY && cy <= tutorialBtnY + nvBtnH) {
+            isTutorialOpen = true;
+            isMenuOpen = false;
+        }
+
+        const bwBtnY = canvas.height / 2 + 120;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= bwBtnY && cy <= bwBtnY + nvBtnH) {
             blackAndWhiteEnabled = !blackAndWhiteEnabled;
             canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
@@ -2496,8 +2581,30 @@ canvas.addEventListener('click', (e) => {
             }
         }
         
+        // Check Reset Progress click
+        const resetBtnY = canvas.height / 2 + 165;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
+            score = 0;
+            highScore = 0;
+            credits = 0;
+            projSpeedBonus = 0;
+            ammoBonus = 0;
+            radarBonus = 0;
+            homingBonus = 0;
+            tripleAmmo = 40;
+            homingAmmo = 0;
+            weaponType = 'single';
+            nextBossScore = 20;
+            nextJuggernautScore = 100;
+            ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];
+            localStorage.setItem('warshipHighScore', 0);
+            localStorage.removeItem('warshipSaveData');
+            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            isMenuOpen = false;
+        }
+
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 120;
+        const closeMenuBtnY = canvas.height / 2 + 210;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }
@@ -2573,7 +2680,7 @@ function gameLoop() {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 20px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('SKIP TUTORIAL', canvas.width / 2, skipBtnY + skipBtnH / 2);
+        ctx.fillText('CLOSE TUTORIAL', canvas.width / 2, skipBtnY + skipBtnH / 2);
         ctx.restore();
         
         requestAnimationFrame(gameLoop);
@@ -2608,9 +2715,25 @@ function gameLoop() {
         ctx.font = 'bold 20px monospace';
         ctx.fillText('START & SPAWN BOSS', canvas.width / 2, bossBtnY + bossBtnH / 2);
         
+        // Draw How to Play Button
+        const tutBtnW = 280;
+        const tutBtnH = 40;
+        const tutBtnX = canvas.width / 2 - tutBtnW / 2;
+        const tutBtnY = canvas.height / 2 + 80;
+        
+        ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 100, 200, 0.9)';
+        ctx.fillRect(tutBtnX, tutBtnY, tutBtnW, tutBtnH);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tutBtnX, tutBtnY, tutBtnW, tutBtnH);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('HOW TO PLAY', canvas.width / 2, tutBtnY + tutBtnH / 2);
+        
         ctx.fillStyle = '#00ff00';
         ctx.font = '16px monospace';
-        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 110);
+        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 150);
         ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
