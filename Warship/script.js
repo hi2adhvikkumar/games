@@ -38,6 +38,14 @@ window.addEventListener('click', () => {
 });
 window.addEventListener('keydown', (e) => {
     initAudio();
+    if (isTutorialOpen) {
+        if (e.code === 'Space' || e.key === ' ' || e.key === 'Escape' || e.key === 'Enter') {
+            isTutorialOpen = false;
+            localStorage.setItem('warshipTutorialDone', 'true');
+        }
+        return;
+    }
+
     let justStarted = false;
     if (!gameStarted) {
         gameStarted = true;
@@ -121,7 +129,7 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('wheel', (e) => {
-    if (!gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen) return;
+    if (!gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen || isTutorialOpen) return;
     
     const rect = canvas.getBoundingClientRect();
     const cxCenter = canvas.width / 2;
@@ -177,6 +185,7 @@ const addBossBtn = () => {
     btn.onclick = (e) => {
         e.stopPropagation();
         initAudio();
+        if (isTutorialOpen) return;
         if (!gameStarted) gameStarted = true;
         spawnDreadnoughtPending = true;
         dreadnoughtWarningTimer = 180;
@@ -206,6 +215,7 @@ let isMenuOpen = false;
 let isUpgradesOpen = false;
 let gameStarted = false;
 let isShipTypesOpen = false;
+let isTutorialOpen = localStorage.getItem('warshipTutorialDone') !== 'true';
 let nightVisionEnabled = false;
 let blackAndWhiteEnabled = false;
 let shakeIntensity = 0;
@@ -2256,6 +2266,19 @@ canvas.addEventListener('click', (e) => {
     const cx = (cxPhysical - cxCenter) / globalZoomLevel + cxCenter;
     const cy = (cyPhysical - cyCenter) / globalZoomLevel + cyCenter;
 
+    if (isTutorialOpen) {
+        const skipBtnW = 240;
+        const skipBtnH = 50;
+        const skipBtnX = canvas.width / 2 - skipBtnW / 2;
+        const skipBtnY = canvas.height / 2 + 180;
+        
+        if (cxPhysical >= skipBtnX && cxPhysical <= skipBtnX + skipBtnW && cyPhysical >= skipBtnY && cyPhysical <= skipBtnY + skipBtnH) {
+            isTutorialOpen = false;
+            localStorage.setItem('warshipTutorialDone', 'true');
+        }
+        return;
+    }
+
     // Check if clicked on a gauge (tap the glass effect)
     const gaugeCenters = {
         pressure: { x: cxCenter - 535, y: cyCenter - 220 },
@@ -2500,6 +2523,63 @@ canvas.addEventListener('click', (e) => {
 });
 
 function gameLoop() {
+    const bossBtnHtml = document.getElementById('boss-btn-html');
+    if (bossBtnHtml) {
+        bossBtnHtml.style.display = (isTutorialOpen || gameStarted) ? 'none' : 'block';
+    }
+
+    if (isTutorialOpen) {
+        draw(); // Draw the initial static frame of the game
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 40px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('HOW TO PLAY', canvas.width / 2, canvas.height / 2 - 180);
+        
+        ctx.font = '18px monospace';
+        const instructions = [
+            "• You are the commander of a submarine.",
+            "• Aim with your mouse and click (or press SPACE) to shoot torpedoes.",
+            "• Scroll the mouse wheel to Zoom in/out.",
+            "• Destroy enemy ships to earn credits and points.",
+            "• DO NOT shoot the white Civilian Hospital ships! (-20 Credits)",
+            "• Shoot floating crates to restock special ammo.",
+            "• Shoot falling bombs before they hit the water!",
+            "• Press 'U' or click UPGRADES to improve your submarine.",
+            "• Press 'ESC' or 'P' to pause the game."
+        ];
+        
+        ctx.textAlign = 'left';
+        const startX = canvas.width / 2 - 320;
+        for (let i = 0; i < instructions.length; i++) {
+            ctx.fillText(instructions[i], startX, canvas.height / 2 - 100 + (i * 30));
+        }
+        
+        const skipBtnW = 240;
+        const skipBtnH = 50;
+        const skipBtnX = canvas.width / 2 - skipBtnW / 2;
+        const skipBtnY = canvas.height / 2 + 180;
+        
+        ctx.fillStyle = 'rgba(0, 100, 0, 0.9)';
+        ctx.fillRect(skipBtnX, skipBtnY, skipBtnW, skipBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(skipBtnX, skipBtnY, skipBtnW, skipBtnH);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SKIP TUTORIAL', canvas.width / 2, skipBtnY + skipBtnH / 2);
+        ctx.restore();
+        
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
     if (!gameStarted) {
         draw(); // Draw the initial static frame of the game
         ctx.save();
