@@ -2025,7 +2025,7 @@ function draw() {
         ctx.strokeRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
         ctx.fillStyle = '#ff0000';
         ctx.font = '16px monospace';
-        ctx.fillText('Reset Progress', canvas.width / 2, resetBtnY + nvBtnH / 2);
+        ctx.fillText('Load Save / Reset', canvas.width / 2, resetBtnY + nvBtnH / 2);
 
         // Draw Close Menu Button
         const closeMenuBtnY = canvas.height / 2 + 210;
@@ -2584,21 +2584,38 @@ canvas.addEventListener('click', (e) => {
         // Check Reset Progress click
         const resetBtnY = canvas.height / 2 + 165;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
-            score = 0;
-            highScore = 0;
-            credits = 0;
-            projSpeedBonus = 0;
-            ammoBonus = 0;
-            radarBonus = 0;
-            homingBonus = 0;
-            tripleAmmo = 40;
-            homingAmmo = 0;
-            weaponType = 'single';
-            nextBossScore = 20;
-            nextJuggernautScore = 100;
+            try {
+                const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
+                if (savedData) {
+                    score = savedData.score || 0;
+                    highScore = savedData.highScore || highScore;
+                    credits = savedData.credits || 0;
+                    projSpeedBonus = savedData.projSpeedBonus || 0;
+                    ammoBonus = savedData.ammoBonus || 0;
+                    radarBonus = savedData.radarBonus || 0;
+                    homingBonus = savedData.homingBonus || 0;
+                    tripleAmmo = savedData.tripleAmmo || 40;
+                    homingAmmo = savedData.homingAmmo || 0;
+                    weaponType = savedData.weaponType || 'single';
+                    nextBossScore = savedData.nextBossScore || 20;
+                    nextJuggernautScore = savedData.nextJuggernautScore || 100;
+                } else {
+                    score = 0;
+                    highScore = 0;
+                    credits = 0;
+                    projSpeedBonus = 0;
+                    ammoBonus = 0;
+                    radarBonus = 0;
+                    homingBonus = 0;
+                    tripleAmmo = 40;
+                    homingAmmo = 0;
+                    weaponType = 'single';
+                    nextBossScore = 20;
+                    nextJuggernautScore = 100;
+                    localStorage.setItem('warshipHighScore', 0);
+                }
+            } catch(e) {}
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];
-            localStorage.setItem('warshipHighScore', 0);
-            localStorage.removeItem('warshipSaveData');
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             isMenuOpen = false;
         }
