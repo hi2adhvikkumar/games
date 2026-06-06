@@ -85,13 +85,14 @@ window.addEventListener('keydown', (e) => {
         if (bossBtnHtml) {
             bossBtnHtml.style.backgroundColor = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(150, 40, 40, 0.9)';
         }
+        if (typeof updateAudioTheme === 'function') updateAudioTheme(blackAndWhiteEnabled);
     }
         // Save progress shortcut 'T'
         if (e.key && e.key.toLowerCase() === 't') {
             const saveData = {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
                 radarBonus, homingBonus, tripleAmmo, homingAmmo, 
-                weaponType, nextBossScore, nextJuggernautScore, masterVolume
+                weaponType, nextBossScore, nextJuggernautScore, masterVolume, ambientVolume
             };
             localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
@@ -244,6 +245,7 @@ let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
 let masterVolume = 1.0;
+let ambientVolume = 1.0;
 
 // Load saved data if it exists
 try {
@@ -262,8 +264,170 @@ try {
         nextBossScore = savedData.nextBossScore || 20;
         nextJuggernautScore = savedData.nextJuggernautScore || 100;
         masterVolume = savedData.masterVolume !== undefined ? savedData.masterVolume : 1.0;
+        ambientVolume = savedData.ambientVolume !== undefined ? savedData.ambientVolume : 1.0;
     }
 } catch(e) {}
+
+const addVolumeSlider = () => {
+    if (document.getElementById('volume-container')) return;
+    if (!document.body) {
+        setTimeout(addVolumeSlider, 50); // Wait until body exists
+        return;
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .slider-wrapper {
+            width: 30px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .custom-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100px;
+            height: 8px;
+            background: #1a1e20;
+            outline: none;
+            border-radius: 4px;
+            border: 1px solid #000;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.9);
+            transform: rotate(-90deg);
+            margin: 0;
+            cursor: pointer;
+        }
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 16px;
+            background: linear-gradient(to bottom, #8a6327, #3d2b10);
+            border: 2px solid #111;
+            border-radius: 3px;
+            cursor: pointer;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+        }
+        .custom-slider::-moz-range-thumb {
+            width: 24px;
+            height: 16px;
+            background: linear-gradient(to bottom, #8a6327, #3d2b10);
+            border: 2px solid #111;
+            border-radius: 3px;
+            cursor: pointer;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+        }
+    `;
+    document.head.appendChild(style);
+
+    const container = document.createElement('div');
+    container.id = 'volume-container';
+    Object.assign(container.style, {
+        position: 'absolute',
+        zIndex: '999999',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: '15px',
+        backgroundColor: '#2b3035',
+        padding: '10px 15px',
+        borderRadius: '4px',
+        border: '2px solid #111',
+        borderTopColor: '#555',
+        borderLeftColor: '#555',
+        color: '#d0d8dc',
+        fontFamily: 'monospace',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        textShadow: '1px 1px 0 #000',
+        boxShadow: '3px 3px 10px rgba(0,0,0,0.8)'
+    });
+
+    const createSliderCol = (labelTxt, idPrefix, currentVol, updateFn) => {
+        const col = document.createElement('div');
+        col.style.display = 'flex';
+        col.style.flexDirection = 'column';
+        col.style.alignItems = 'center';
+        col.style.gap = '5px';
+
+        const label = document.createElement('span');
+        label.textContent = labelTxt;
+        label.id = `${idPrefix}-label`;
+        label.style.cursor = 'pointer';
+        label.title = `Click to Mute/Unmute ${labelTxt}`;
+        if (currentVol === 0) label.style.color = '#ff0000';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'slider-wrapper';
+        
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.className = 'custom-slider';
+        slider.id = `${idPrefix}-slider`;
+        slider.min = '0';
+        slider.max = '1';
+        slider.step = '0.01';
+        slider.value = currentVol;
+
+        let prevVol = currentVol > 0 ? currentVol : 1.0;
+        
+        const applyVol = (vol) => {
+            slider.value = vol;
+            if (updateFn) updateFn(vol);
+            label.style.color = vol === 0 ? '#ff0000' : '#d0d8dc';
+            if (idPrefix === 'master') masterVolume = vol;
+            if (idPrefix === 'ambient') ambientVolume = vol;
+        };
+
+        label.addEventListener('click', (e) => {
+            if (typeof initAudio === 'function') initAudio();
+            let vol = (idPrefix === 'master' ? masterVolume : ambientVolume);
+            if (vol > 0) {
+                prevVol = vol;
+                applyVol(0);
+            } else {
+                applyVol(prevVol);
+            }
+        });
+
+        slider.addEventListener('input', (e) => {
+            if (typeof initAudio === 'function') initAudio();
+            applyVol(parseFloat(e.target.value));
+        });
+
+        let isDragging = false;
+        slider.addEventListener('mousedown', () => {
+            isDragging = true;
+            if (typeof initAudio === 'function') initAudio();
+        });
+        window.addEventListener('mouseup', () => isDragging = false);
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = wrapper.getBoundingClientRect();
+                let percent = 1 - ((e.clientY - rect.top) / rect.height);
+                percent = Math.max(0, Math.min(1, percent));
+                applyVol(percent);
+            }
+        });
+
+        wrapper.appendChild(slider);
+        col.appendChild(label);
+        col.appendChild(wrapper);
+        return col;
+    };
+
+    container.appendChild(createSliderCol('VOL', 'master', masterVolume, (v) => { if (typeof updateMasterVolume === 'function') updateMasterVolume(v); }));
+    container.appendChild(createSliderCol('WAVES', 'ambient', ambientVolume, (v) => { if (typeof updateAmbientVolume === 'function') updateAmbientVolume(v); }));
+    
+    // Prevent dragging the slider from interacting with the canvas
+    container.addEventListener('mousedown', (e) => e.stopPropagation());
+    container.addEventListener('click', (e) => e.stopPropagation());
+    container.addEventListener('wheel', (e) => e.stopPropagation());
+
+    document.body.appendChild(container);
+};
+addVolumeSlider();
 
 const turret = {
     x: canvas.width / 2,
@@ -713,6 +877,10 @@ function update() {
     } else {
         submergeRatio = Math.max(0.0, submergeRatio - 0.02);
     }
+
+    if (typeof updateAmbientSubmerge === 'function') {
+        updateAmbientSubmerge(submergeRatio);
+    }
     
     // Animate the windshield wiper
     if (wiperProgress > 0) {
@@ -922,10 +1090,12 @@ function draw() {
 
     // Apply Screen Shake
     ctx.save();
+    let currentShakeX = 0;
+    let currentShakeY = 0;
     if (shakeIntensity > 0) {
-        const dx = (Math.random() - 0.5) * shakeIntensity;
-        const dy = (Math.random() - 0.5) * shakeIntensity;
-        ctx.translate(dx, dy);
+        currentShakeX = (Math.random() - 0.5) * shakeIntensity;
+        currentShakeY = (Math.random() - 0.5) * shakeIntensity;
+        ctx.translate(currentShakeX, currentShakeY);
     }
 
     // Clip to the periscope view (circular)
@@ -1950,10 +2120,10 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
@@ -2009,18 +2179,8 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText('How to Play', canvas.width / 2, tutorialBtnY + nvBtnH / 2);
 
-        // Draw Volume Button
-        const volBtnY = canvas.height / 2 + 120;
-        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
-        ctx.fillRect(nvBtnX, volBtnY, nvBtnW, nvBtnH);
-        ctx.strokeStyle = '#00ff00';
-        ctx.strokeRect(nvBtnX, volBtnY, nvBtnW, nvBtnH);
-        ctx.fillStyle = '#00ff00';
-        ctx.font = '16px monospace';
-        ctx.fillText(masterVolume === 0 ? 'Volume: MUTED' : `Volume: ${Math.round(masterVolume * 100)}%`, canvas.width / 2, volBtnY + nvBtnH / 2);
-
         // Draw Black and White Theme Button
-        const bwBtnY = canvas.height / 2 + 165;
+        const bwBtnY = canvas.height / 2 + 120;
         ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -2030,7 +2190,7 @@ function draw() {
         ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
 
         // Draw Reset Progress Button
-        const resetBtnY = canvas.height / 2 + 210;
+        const resetBtnY = canvas.height / 2 + 165;
         ctx.fillStyle = 'rgba(100, 0, 0, 0.8)';
         ctx.fillRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#ff0000';
@@ -2040,7 +2200,7 @@ function draw() {
         ctx.fillText('Load Save / Reset', canvas.width / 2, resetBtnY + nvBtnH / 2);
 
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 255;
+        const closeMenuBtnY = canvas.height / 2 + 210;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -2287,6 +2447,31 @@ function draw() {
 
     ctx.restore(); // Restore from Screen Shake
     ctx.restore(); // Restore from Global Zoom
+
+    // Sync HTML Volume Slider position with the dashboard
+    const volContainer = document.getElementById('volume-container');
+    if (volContainer) {
+        const cxCenter = canvas.width / 2;
+        const cyCenter = canvas.height / 2;
+        const screenX = cxCenter + (-750 * globalZoomLevel) + (currentShakeX * globalZoomLevel);
+        const screenY = cyCenter + (-60 * globalZoomLevel) + (currentShakeY * globalZoomLevel);
+        volContainer.style.left = `${screenX}px`;
+        volContainer.style.top = `${screenY}px`;
+        volContainer.style.transform = `scale(${globalZoomLevel})`;
+        volContainer.style.transformOrigin = 'top left';
+        
+        // Dim the slider when menus are open to match the dark overlay
+        volContainer.style.opacity = (isMenuOpen || isUpgradesOpen || isShipTypesOpen || isTutorialOpen || !gameStarted) ? '0.3' : '1.0';
+
+        // Apply theme filters to seamlessly blend it into the dashboard
+        if (nightVisionEnabled) {
+            volContainer.style.filter = 'sepia(100%) hue-rotate(70deg) saturate(400%) brightness(0.8)';
+        } else if (blackAndWhiteEnabled) {
+            volContainer.style.filter = 'grayscale(100%)';
+        } else {
+            volContainer.style.filter = 'none';
+        }
+    }
 }
 
 canvas.addEventListener('mousemove', (e) => {
@@ -2583,16 +2768,7 @@ canvas.addEventListener('click', (e) => {
             isMenuOpen = false;
         }
 
-        const volBtnY = canvas.height / 2 + 120;
-        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= volBtnY && cy <= volBtnY + nvBtnH) {
-            masterVolume += 0.25;
-            if (masterVolume > 1.05) masterVolume = 0.0;
-            if (typeof updateMasterVolume === 'function') {
-                updateMasterVolume(masterVolume);
-            }
-        }
-
-        const bwBtnY = canvas.height / 2 + 165;
+        const bwBtnY = canvas.height / 2 + 120;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= bwBtnY && cy <= bwBtnY + nvBtnH) {
             blackAndWhiteEnabled = !blackAndWhiteEnabled;
             canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
@@ -2600,10 +2776,11 @@ canvas.addEventListener('click', (e) => {
             if (bossBtnHtml) {
                 bossBtnHtml.style.backgroundColor = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(150, 40, 40, 0.9)';
             }
+            if (typeof updateAudioTheme === 'function') updateAudioTheme(blackAndWhiteEnabled);
         }
         
         // Check Reset Progress click
-        const resetBtnY = canvas.height / 2 + 210;
+        const resetBtnY = canvas.height / 2 + 165;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
             try {
                 const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
@@ -2623,6 +2800,18 @@ canvas.addEventListener('click', (e) => {
                     if (savedData.masterVolume !== undefined) {
                         masterVolume = savedData.masterVolume;
                         if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
+                        const slider = document.getElementById('master-slider');
+                        if (slider) slider.value = masterVolume;
+                        const label = document.getElementById('master-label');
+                        if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
+                    }
+                    if (savedData.ambientVolume !== undefined) {
+                        ambientVolume = savedData.ambientVolume;
+                        if (typeof updateAmbientVolume === 'function') updateAmbientVolume(ambientVolume);
+                        const aSlider = document.getElementById('ambient-slider');
+                        if (aSlider) aSlider.value = ambientVolume;
+                        const aLabel = document.getElementById('ambient-label');
+                        if (aLabel) aLabel.style.color = ambientVolume === 0 ? '#ff0000' : '#d0d8dc';
                     }
                 } else {
                     score = 0;
@@ -2640,6 +2829,17 @@ canvas.addEventListener('click', (e) => {
                     localStorage.setItem('warshipHighScore', 0);
                     masterVolume = 1.0;
                     if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
+                    const slider = document.getElementById('master-slider');
+                    if (slider) slider.value = masterVolume;
+                    const label = document.getElementById('master-label');
+                    if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
+
+                    ambientVolume = 1.0;
+                    if (typeof updateAmbientVolume === 'function') updateAmbientVolume(ambientVolume);
+                    const aSlider = document.getElementById('ambient-slider');
+                    if (aSlider) aSlider.value = ambientVolume;
+                    const aLabel = document.getElementById('ambient-label');
+                    if (aLabel) aLabel.style.color = ambientVolume === 0 ? '#ff0000' : '#d0d8dc';
                 }
             } catch(e) {}
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];
@@ -2648,7 +2848,7 @@ canvas.addEventListener('click', (e) => {
         }
 
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 255;
+        const closeMenuBtnY = canvas.height / 2 + 210;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }

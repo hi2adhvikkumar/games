@@ -1,6 +1,10 @@
 let audioCtx;
 let masterGain;
+let ambientGainNode;
+let waveFilter;
+let humGainNode;
 let ambientStarted = false;
+let themeFilterNode;
 
 function initAudio() {
     try {
@@ -8,10 +12,21 @@ function initAudio() {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
             masterGain = audioCtx.createGain();
+            ambientGainNode = audioCtx.createGain();
+            
+            themeFilterNode = audioCtx.createBiquadFilter();
+            themeFilterNode.type = 'allpass'; // Default: no effect
+            themeFilterNode.frequency.value = 1000;
+            
             if (typeof masterVolume !== 'undefined') {
                 masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
             }
-            masterGain.connect(audioCtx.destination);
+            if (typeof ambientVolume !== 'undefined') {
+                ambientGainNode.gain.setValueAtTime(ambientVolume, audioCtx.currentTime);
+            }
+            ambientGainNode.connect(masterGain);
+            masterGain.connect(themeFilterNode);
+            themeFilterNode.connect(audioCtx.destination);
         }
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
@@ -30,6 +45,26 @@ function updateMasterVolume(vol) {
     }
 }
 
+function updateAmbientVolume(vol) {
+    if (ambientGainNode && audioCtx) {
+        ambientGainNode.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
+    }
+}
+
+function updateAudioTheme(isBW) {
+    if (!themeFilterNode || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    if (isBW) {
+        // Old WW2 1940s radio effect (Bandpass filter)
+        themeFilterNode.type = 'bandpass';
+        themeFilterNode.frequency.setTargetAtTime(1200, now, 0.1);
+        themeFilterNode.Q.setTargetAtTime(1.5, now, 0.1);
+    } else {
+        // Normal clear audio
+        themeFilterNode.type = 'allpass';
+    }
+}
+
 function startAmbientAudio() {
     if (!audioCtx) return;
     try {
@@ -40,10 +75,10 @@ function startAmbientAudio() {
         const humOsc = audioCtx.createOscillator();
         humOsc.type = 'triangle'; 
         humOsc.frequency.setValueAtTime(65, now); // Raised pitch so it's audible on laptop/monitor speakers
-        const humGain = audioCtx.createGain();
-        humGain.gain.setValueAtTime(0.30, now); // Increased volume
-        humOsc.connect(humGain);
-        humGain.connect(masterGain);
+        humGainNode = audioCtx.createGain();
+        humGainNode.gain.setValueAtTime(0.30, now); // Increased volume
+        humOsc.connect(humGainNode);
+        humGainNode.connect(ambientGainNode);
         humOsc.start(now);
 
         // --- Ocean Waves / Wind ---
@@ -58,9 +93,9 @@ function startAmbientAudio() {
         noiseSource.loop = true;
 
         // Filter and sweep to simulate rolling waves
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(400, now); // Let more high-frequencies through for a "crisper" wave sound
+        waveFilter = audioCtx.createBiquadFilter();
+        waveFilter.type = 'lowpass';
+        waveFilter.frequency.setValueAtTime(400, now); // Let more high-frequencies through for a "crisper" wave sound
         
         const lfoFreq = audioCtx.createOscillator();
         lfoFreq.type = 'sine';
@@ -79,13 +114,13 @@ function startAmbientAudio() {
         
         // Connect the nodes
         lfoFreq.connect(lfoFreqGain);
-        lfoFreqGain.connect(filter.frequency);
+        lfoFreqGain.connect(waveFilter.frequency);
         lfoVol.connect(lfoVolGain);
         lfoVolGain.connect(waveGain.gain);
         
-        noiseSource.connect(filter);
-        filter.connect(waveGain);
-        waveGain.connect(masterGain);
+        noiseSource.connect(waveFilter);
+        waveFilter.connect(waveGain);
+        waveGain.connect(ambientGainNode);
 
         noiseSource.start(now);
         lfoFreq.start(now);
@@ -94,6 +129,19 @@ function startAmbientAudio() {
     } catch (e) {
         console.error("Ambient audio error:", e);
     }
+}
+
+function updateAmbientSubmerge(ratio) {
+    if (!audioCtx || !waveFilter || !humGainNode) return;
+    const now = audioCtx.currentTime;
+    
+    // Smoothly lower the lowpass filter to muffle the ocean waves as you go deeper
+    const targetFreq = 400 - (ratio * 320); // Drops from 400Hz down to a rumbling 80Hz
+    waveFilter.frequency.setTargetAtTime(targetFreq, now, 0.1);
+    
+    // Increase the submarine engine hum to simulate echoing inside the metal hull underwater
+    const targetHumVol = 0.30 + (ratio * 0.40); // Goes from 0.3 up to 0.7
+    humGainNode.gain.setTargetAtTime(targetHumVol, now, 0.1);
 }
 
 function playSonarPing(type = 'ship') {
