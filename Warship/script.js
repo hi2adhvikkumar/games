@@ -91,7 +91,7 @@ window.addEventListener('keydown', (e) => {
             const saveData = {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
                 radarBonus, homingBonus, tripleAmmo, homingAmmo, 
-                weaponType, nextBossScore, nextJuggernautScore
+                weaponType, nextBossScore, nextJuggernautScore, masterVolume
             };
             localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
@@ -243,6 +243,7 @@ let spawnJuggernautPending = false;
 let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
+let masterVolume = 1.0;
 
 // Load saved data if it exists
 try {
@@ -260,6 +261,7 @@ try {
         weaponType = savedData.weaponType || 'single';
         nextBossScore = savedData.nextBossScore || 20;
         nextJuggernautScore = savedData.nextJuggernautScore || 100;
+        masterVolume = savedData.masterVolume !== undefined ? savedData.masterVolume : 1.0;
     }
 } catch(e) {}
 
@@ -1948,10 +1950,10 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
@@ -2007,8 +2009,18 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText('How to Play', canvas.width / 2, tutorialBtnY + nvBtnH / 2);
 
+        // Draw Volume Button
+        const volBtnY = canvas.height / 2 + 120;
+        ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
+        ctx.fillRect(nvBtnX, volBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, volBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '16px monospace';
+        ctx.fillText(masterVolume === 0 ? 'Volume: MUTED' : `Volume: ${Math.round(masterVolume * 100)}%`, canvas.width / 2, volBtnY + nvBtnH / 2);
+
         // Draw Black and White Theme Button
-        const bwBtnY = canvas.height / 2 + 120;
+        const bwBtnY = canvas.height / 2 + 165;
         ctx.fillStyle = blackAndWhiteEnabled ? '#ffffff' : 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, bwBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -2018,7 +2030,7 @@ function draw() {
         ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
 
         // Draw Reset Progress Button
-        const resetBtnY = canvas.height / 2 + 165;
+        const resetBtnY = canvas.height / 2 + 210;
         ctx.fillStyle = 'rgba(100, 0, 0, 0.8)';
         ctx.fillRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#ff0000';
@@ -2028,7 +2040,7 @@ function draw() {
         ctx.fillText('Load Save / Reset', canvas.width / 2, resetBtnY + nvBtnH / 2);
 
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 210;
+        const closeMenuBtnY = canvas.height / 2 + 255;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -2571,7 +2583,16 @@ canvas.addEventListener('click', (e) => {
             isMenuOpen = false;
         }
 
-        const bwBtnY = canvas.height / 2 + 120;
+        const volBtnY = canvas.height / 2 + 120;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= volBtnY && cy <= volBtnY + nvBtnH) {
+            masterVolume += 0.25;
+            if (masterVolume > 1.05) masterVolume = 0.0;
+            if (typeof updateMasterVolume === 'function') {
+                updateMasterVolume(masterVolume);
+            }
+        }
+
+        const bwBtnY = canvas.height / 2 + 165;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= bwBtnY && cy <= bwBtnY + nvBtnH) {
             blackAndWhiteEnabled = !blackAndWhiteEnabled;
             canvas.style.filter = blackAndWhiteEnabled ? 'grayscale(100%)' : 'none';
@@ -2582,7 +2603,7 @@ canvas.addEventListener('click', (e) => {
         }
         
         // Check Reset Progress click
-        const resetBtnY = canvas.height / 2 + 165;
+        const resetBtnY = canvas.height / 2 + 210;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
             try {
                 const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
@@ -2599,6 +2620,10 @@ canvas.addEventListener('click', (e) => {
                     weaponType = savedData.weaponType || 'single';
                     nextBossScore = savedData.nextBossScore || 20;
                     nextJuggernautScore = savedData.nextJuggernautScore || 100;
+                    if (savedData.masterVolume !== undefined) {
+                        masterVolume = savedData.masterVolume;
+                        if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
+                    }
                 } else {
                     score = 0;
                     highScore = 0;
@@ -2613,6 +2638,8 @@ canvas.addEventListener('click', (e) => {
                     nextBossScore = 20;
                     nextJuggernautScore = 100;
                     localStorage.setItem('warshipHighScore', 0);
+                    masterVolume = 1.0;
+                    if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
                 }
             } catch(e) {}
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];
@@ -2621,7 +2648,7 @@ canvas.addEventListener('click', (e) => {
         }
 
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 210;
+        const closeMenuBtnY = canvas.height / 2 + 255;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }
@@ -2649,7 +2676,7 @@ canvas.addEventListener('click', (e) => {
 function gameLoop() {
     const bossBtnHtml = document.getElementById('boss-btn-html');
     if (bossBtnHtml) {
-        bossBtnHtml.style.display = (isTutorialOpen || gameStarted) ? 'none' : 'block';
+        bossBtnHtml.style.display = (isTutorialOpen || !gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen) ? 'none' : 'block';
     }
 
     if (isTutorialOpen) {

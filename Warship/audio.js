@@ -1,4 +1,5 @@
 let audioCtx;
+let masterGain;
 let ambientStarted = false;
 
 function initAudio() {
@@ -6,6 +7,11 @@ function initAudio() {
         if (!audioCtx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
+            masterGain = audioCtx.createGain();
+            if (typeof masterVolume !== 'undefined') {
+                masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+            }
+            masterGain.connect(audioCtx.destination);
         }
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
@@ -15,6 +21,12 @@ function initAudio() {
         }
     } catch (e) {
         console.error("Audio init error:", e);
+    }
+}
+
+function updateMasterVolume(vol) {
+    if (masterGain && audioCtx) {
+        masterGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
     }
 }
 
@@ -31,7 +43,7 @@ function startAmbientAudio() {
         const humGain = audioCtx.createGain();
         humGain.gain.setValueAtTime(0.30, now); // Increased volume
         humOsc.connect(humGain);
-        humGain.connect(audioCtx.destination);
+        humGain.connect(masterGain);
         humOsc.start(now);
 
         // --- Ocean Waves / Wind ---
@@ -73,7 +85,7 @@ function startAmbientAudio() {
         
         noiseSource.connect(filter);
         filter.connect(waveGain);
-        waveGain.connect(audioCtx.destination);
+        waveGain.connect(masterGain);
 
         noiseSource.start(now);
         lfoFreq.start(now);
@@ -105,7 +117,7 @@ function playSonarPing(type = 'ship') {
         gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.03); // Very fast decay
         
         oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        gainNode.connect(masterGain);
         
         oscillator.start(now);
         oscillator.stop(now + 0.04);
@@ -144,7 +156,7 @@ function playExplosionSound() {
         
         noise.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(masterGain);
         noise.start(now);
 
         // Layer 2: Fast pitch drop (The mechanical switch sound)
@@ -159,7 +171,7 @@ function playExplosionSound() {
         oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
         
         osc.connect(oscGain);
-        oscGain.connect(audioCtx.destination);
+        oscGain.connect(masterGain);
         
         osc.start(now);
         osc.stop(now + duration);
@@ -189,7 +201,7 @@ function playShootSound() {
         gainBoom.gain.exponentialRampToValueAtTime(0.01, now + duration);
         
         oscBoom.connect(gainBoom);
-        gainBoom.connect(audioCtx.destination);
+        gainBoom.connect(masterGain);
         
         oscBoom.start(now);
         oscBoom.stop(now + duration);
@@ -212,7 +224,7 @@ function playShootSound() {
         
         oscCrack.connect(filterCrack);
         filterCrack.connect(gainCrack);
-        gainCrack.connect(audioCtx.destination);
+        gainCrack.connect(masterGain);
         oscCrack.start(now);
         oscCrack.stop(now + 0.3);
 
@@ -239,7 +251,7 @@ function playShootSound() {
         
         noise.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(masterGain);
 
         // Layer 4: Distant Ocean Echo (Thunderous rumble after the shot)
         const echoFilter = audioCtx.createBiquadFilter();
@@ -255,7 +267,7 @@ function playShootSound() {
         
         noise.connect(echoFilter);
         echoFilter.connect(echoGain);
-        echoGain.connect(audioCtx.destination);
+        echoGain.connect(masterGain);
         
         noise.start(now);
 
@@ -297,7 +309,7 @@ function playThunderSound() {
         
         noise.connect(filter);
         filter.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        gainNode.connect(masterGain);
         
         noise.start(now);
     } catch (e) {
@@ -332,7 +344,7 @@ function playSplashSound() {
 
         noise.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(masterGain);
         noise.start(now);
     } catch (e) {
         console.error("Audio error:", e);
@@ -358,7 +370,7 @@ function playMassiveExplosionSound() {
         gainBoom.gain.exponentialRampToValueAtTime(0.01, now + duration);
         
         oscBoom.connect(gainBoom);
-        gainBoom.connect(audioCtx.destination);
+        gainBoom.connect(masterGain);
         
         oscBoom.start(now);
         oscBoom.stop(now + duration);
@@ -384,7 +396,7 @@ function playMassiveExplosionSound() {
         
         noise.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
-        noiseGain.connect(audioCtx.destination);
+        noiseGain.connect(masterGain);
         
         noise.start(now);
     } catch (e) {
@@ -414,7 +426,7 @@ function playWiperSqueak() {
         gain.gain.linearRampToValueAtTime(0, now + duration);
         
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(masterGain);
         
         osc.start(now);
         osc.stop(now + duration);
@@ -456,7 +468,7 @@ function playPlaneWhooshSound() {
         
         noise.connect(filter);
         filter.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        gainNode.connect(masterGain);
         
         noise.start(now);
     } catch (e) {
