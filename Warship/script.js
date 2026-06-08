@@ -92,7 +92,7 @@ window.addEventListener('keydown', (e) => {
             const saveData = {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
                 radarBonus, homingBonus, tripleAmmo, homingAmmo, 
-                weaponType, nextBossScore, nextJuggernautScore, masterVolume, ambientVolume
+                weaponType, nextBossScore, nextJuggernautScore, masterVolume
             };
             localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
@@ -245,7 +245,6 @@ let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
 let masterVolume = 1.0;
-let ambientVolume = 1.0;
 
 // Load saved data if it exists
 try {
@@ -264,7 +263,6 @@ try {
         nextBossScore = savedData.nextBossScore || 20;
         nextJuggernautScore = savedData.nextJuggernautScore || 100;
         masterVolume = savedData.masterVolume !== undefined ? savedData.masterVolume : 1.0;
-        ambientVolume = savedData.ambientVolume !== undefined ? savedData.ambientVolume : 1.0;
     }
 } catch(e) {}
 
@@ -296,7 +294,7 @@ const addVolumeSlider = () => {
             box-shadow: inset 0 1px 3px rgba(0,0,0,0.9);
             transform: rotate(-90deg);
             margin: 0;
-            cursor: pointer;
+            pointer-events: none; /* Prevents overlapping horizontal bounding boxes from stealing clicks! */
         }
         .custom-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
@@ -308,6 +306,7 @@ const addVolumeSlider = () => {
             border-radius: 3px;
             cursor: pointer;
             box-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none; /* Ensures the thumb cannot steal clicks! */
         }
         .custom-slider::-moz-range-thumb {
             width: 24px;
@@ -317,6 +316,7 @@ const addVolumeSlider = () => {
             border-radius: 3px;
             cursor: pointer;
             box-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none;
         }
     `;
     document.head.appendChild(style);
@@ -360,6 +360,7 @@ const addVolumeSlider = () => {
 
         const wrapper = document.createElement('div');
         wrapper.className = 'slider-wrapper';
+        wrapper.style.cursor = 'pointer';
         
         const slider = document.createElement('input');
         slider.type = 'range';
@@ -377,12 +378,11 @@ const addVolumeSlider = () => {
             if (updateFn) updateFn(vol);
             label.style.color = vol === 0 ? '#ff0000' : '#d0d8dc';
             if (idPrefix === 'master') masterVolume = vol;
-            if (idPrefix === 'ambient') ambientVolume = vol;
         };
 
         label.addEventListener('click', (e) => {
             if (typeof initAudio === 'function') initAudio();
-            let vol = (idPrefix === 'master' ? masterVolume : ambientVolume);
+            let vol = masterVolume;
             if (vol > 0) {
                 prevVol = vol;
                 applyVol(0);
@@ -397,19 +397,45 @@ const addVolumeSlider = () => {
         });
 
         let isDragging = false;
-        slider.addEventListener('mousedown', () => {
+        
+        const processDrag = (e) => {
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const rect = wrapper.getBoundingClientRect();
+            // Account for the slider thumb's height (24px) so it can reach exactly 0 and 1
+            const padding = 12;
+            const activeHeight = rect.height - padding * 2;
+            let yPos = clientY - rect.top - padding;
+            let percent = 1 - (yPos / activeHeight);
+            percent = Math.max(0, Math.min(1, percent));
+            if (percent < 0.05) percent = 0; // Snap to absolute zero
+            if (percent > 0.95) percent = 1; // Snap to absolute max
+            applyVol(percent);
+        };
+        
+        const handleDragStart = (e) => {
+            e.preventDefault(); 
             isDragging = true;
             if (typeof initAudio === 'function') initAudio();
-        });
-        window.addEventListener('mouseup', () => isDragging = false);
-        window.addEventListener('mousemove', (e) => {
+            processDrag(e);
+        };
+        
+        const handleDragMove = (e) => {
             if (isDragging) {
-                const rect = wrapper.getBoundingClientRect();
-                let percent = 1 - ((e.clientY - rect.top) / rect.height);
-                percent = Math.max(0, Math.min(1, percent));
-                applyVol(percent);
+                processDrag(e);
             }
-        });
+        };
+        
+        const handleDragEnd = () => isDragging = false;
+
+        // Mouse Events
+        wrapper.addEventListener('mousedown', handleDragStart);
+        window.addEventListener('mousemove', handleDragMove);
+        window.addEventListener('mouseup', handleDragEnd);
+        
+        // Touch Events
+        wrapper.addEventListener('touchstart', handleDragStart, {passive: false});
+        window.addEventListener('touchmove', handleDragMove, {passive: false});
+        window.addEventListener('touchend', handleDragEnd);
 
         wrapper.appendChild(slider);
         col.appendChild(label);
@@ -418,7 +444,6 @@ const addVolumeSlider = () => {
     };
 
     container.appendChild(createSliderCol('VOL', 'master', masterVolume, (v) => { if (typeof updateMasterVolume === 'function') updateMasterVolume(v); }));
-    container.appendChild(createSliderCol('WAVES', 'ambient', ambientVolume, (v) => { if (typeof updateAmbientVolume === 'function') updateAmbientVolume(v); }));
     
     // Prevent dragging the slider from interacting with the canvas
     container.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -872,13 +897,14 @@ function update() {
     });
     flares = flares.filter(flare => !flare.isDead());
 
+    let oldSubmergeRatio = submergeRatio;
     if (isSubmerged) {
         submergeRatio = Math.min(1.0, submergeRatio + 0.02);
     } else {
         submergeRatio = Math.max(0.0, submergeRatio - 0.02);
     }
 
-    if (typeof updateAmbientSubmerge === 'function') {
+    if (oldSubmergeRatio !== submergeRatio && typeof updateAmbientSubmerge === 'function') {
         updateAmbientSubmerge(submergeRatio);
     }
     
@@ -2805,14 +2831,6 @@ canvas.addEventListener('click', (e) => {
                         const label = document.getElementById('master-label');
                         if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
                     }
-                    if (savedData.ambientVolume !== undefined) {
-                        ambientVolume = savedData.ambientVolume;
-                        if (typeof updateAmbientVolume === 'function') updateAmbientVolume(ambientVolume);
-                        const aSlider = document.getElementById('ambient-slider');
-                        if (aSlider) aSlider.value = ambientVolume;
-                        const aLabel = document.getElementById('ambient-label');
-                        if (aLabel) aLabel.style.color = ambientVolume === 0 ? '#ff0000' : '#d0d8dc';
-                    }
                 } else {
                     score = 0;
                     highScore = 0;
@@ -2833,13 +2851,6 @@ canvas.addEventListener('click', (e) => {
                     if (slider) slider.value = masterVolume;
                     const label = document.getElementById('master-label');
                     if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
-
-                    ambientVolume = 1.0;
-                    if (typeof updateAmbientVolume === 'function') updateAmbientVolume(ambientVolume);
-                    const aSlider = document.getElementById('ambient-slider');
-                    if (aSlider) aSlider.value = ambientVolume;
-                    const aLabel = document.getElementById('ambient-label');
-                    if (aLabel) aLabel.style.color = ambientVolume === 0 ? '#ff0000' : '#d0d8dc';
                 }
             } catch(e) {}
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];

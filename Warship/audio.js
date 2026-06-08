@@ -19,11 +19,12 @@ function initAudio() {
             themeFilterNode.frequency.value = 1000;
             
             if (typeof masterVolume !== 'undefined') {
-                masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+                masterGain.gain.value = masterVolume;
             }
             if (typeof ambientVolume !== 'undefined') {
-                ambientGainNode.gain.setValueAtTime(ambientVolume, audioCtx.currentTime);
+                ambientGainNode.gain.value = ambientVolume;
             }
+            
             ambientGainNode.connect(masterGain);
             masterGain.connect(themeFilterNode);
             themeFilterNode.connect(audioCtx.destination);
@@ -41,13 +42,25 @@ function initAudio() {
 
 function updateMasterVolume(vol) {
     if (masterGain && audioCtx) {
-        masterGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
+        const now = audioCtx.currentTime;
+        masterGain.gain.cancelScheduledValues(now);
+        masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+        masterGain.gain.linearRampToValueAtTime(vol, now + 0.05);
+        if (vol === 0) {
+            masterGain.gain.setValueAtTime(0, now + 0.06);
+        }
     }
 }
 
 function updateAmbientVolume(vol) {
     if (ambientGainNode && audioCtx) {
-        ambientGainNode.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.05);
+        const now = audioCtx.currentTime;
+        ambientGainNode.gain.cancelScheduledValues(now);
+        ambientGainNode.gain.setValueAtTime(ambientGainNode.gain.value, now);
+        ambientGainNode.gain.linearRampToValueAtTime(vol, now + 0.05);
+        if (vol === 0) {
+            ambientGainNode.gain.setValueAtTime(0, now + 0.06);
+        }
     }
 }
 
@@ -57,8 +70,12 @@ function updateAudioTheme(isBW) {
     if (isBW) {
         // Old WW2 1940s radio effect (Bandpass filter)
         themeFilterNode.type = 'bandpass';
-        themeFilterNode.frequency.setTargetAtTime(1200, now, 0.1);
-        themeFilterNode.Q.setTargetAtTime(1.5, now, 0.1);
+        themeFilterNode.frequency.cancelScheduledValues(now);
+        themeFilterNode.frequency.setValueAtTime(themeFilterNode.frequency.value, now);
+        themeFilterNode.frequency.linearRampToValueAtTime(1200, now + 0.1);
+        themeFilterNode.Q.cancelScheduledValues(now);
+        themeFilterNode.Q.setValueAtTime(themeFilterNode.Q.value, now);
+        themeFilterNode.Q.linearRampToValueAtTime(1.5, now + 0.1);
     } else {
         // Normal clear audio
         themeFilterNode.type = 'allpass';
@@ -137,11 +154,15 @@ function updateAmbientSubmerge(ratio) {
     
     // Smoothly lower the lowpass filter to muffle the ocean waves as you go deeper
     const targetFreq = 400 - (ratio * 320); // Drops from 400Hz down to a rumbling 80Hz
-    waveFilter.frequency.setTargetAtTime(targetFreq, now, 0.1);
+    waveFilter.frequency.cancelScheduledValues(now);
+    waveFilter.frequency.setValueAtTime(waveFilter.frequency.value, now);
+    waveFilter.frequency.linearRampToValueAtTime(targetFreq, now + 0.1);
     
     // Increase the submarine engine hum to simulate echoing inside the metal hull underwater
     const targetHumVol = 0.30 + (ratio * 0.40); // Goes from 0.3 up to 0.7
-    humGainNode.gain.setTargetAtTime(targetHumVol, now, 0.1);
+    humGainNode.gain.cancelScheduledValues(now);
+    humGainNode.gain.setValueAtTime(humGainNode.gain.value, now);
+    humGainNode.gain.linearRampToValueAtTime(targetHumVol, now + 0.1);
 }
 
 function playSonarPing(type = 'ship') {
