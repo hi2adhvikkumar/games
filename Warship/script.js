@@ -92,7 +92,8 @@ window.addEventListener('keydown', (e) => {
             const saveData = {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
                 radarBonus, homingBonus, tripleAmmo, homingAmmo, 
-                weaponType, nextBossScore, nextJuggernautScore, masterVolume
+                weaponType, nextBossScore, nextJuggernautScore, masterVolume,
+                playerHp, playerMaxHp, hullBonus
             };
             localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
@@ -217,6 +218,7 @@ let projSpeedBonus = 0;
 let ammoBonus = 0;
 let radarBonus = 0;
 let homingBonus = 0;
+let hullBonus = 0;
 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
 scoreElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
 radarCountElement.style.display = 'none'; // Hide HTML element to draw on canvas instead
@@ -245,6 +247,10 @@ let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
 let masterVolume = 1.0;
+let playerMaxHp = 50;
+let playerHp = 50;
+let gameOver = false;
+let enemyProjectiles = [];
 
 // Load saved data if it exists
 try {
@@ -257,12 +263,20 @@ try {
         ammoBonus = savedData.ammoBonus || 0;
         radarBonus = savedData.radarBonus || 0;
         homingBonus = savedData.homingBonus || 0;
+        hullBonus = savedData.hullBonus || 0;
         tripleAmmo = savedData.tripleAmmo || 40;
         homingAmmo = savedData.homingAmmo || 0;
         weaponType = savedData.weaponType || 'single';
         nextBossScore = savedData.nextBossScore || 20;
         nextJuggernautScore = savedData.nextJuggernautScore || 100;
         masterVolume = savedData.masterVolume !== undefined ? savedData.masterVolume : 1.0;
+        if (savedData.playerHp !== undefined) playerHp = savedData.playerHp;
+        if (savedData.playerMaxHp !== undefined) playerMaxHp = savedData.playerMaxHp;
+        if (playerMaxHp === 10 || playerMaxHp === 40) {
+            playerMaxHp = 50;
+            playerHp = 50;
+        }
+        if (playerHp <= 0) playerHp = playerMaxHp; // Don't load directly into a game over
     }
 } catch(e) {}
 
@@ -961,6 +975,27 @@ function update() {
     });
     projectiles = activeProjectiles;
 
+    let activeEnemyProjectiles = [];
+    enemyProjectiles.forEach(ep => {
+        ep.update();
+        if (ep.hasHit()) {
+            if (!isSubmerged) {
+                playerHp -= 1;
+                crackGlass(canvas.width / 2, canvas.height / 2);
+                shakeIntensity = 15;
+                if (typeof playExplosionSound === 'function') playExplosionSound();
+                explosions.push(new Explosion(canvas.width / 2 + (Math.random() * 100 - 50), canvas.height / 2 + 100, false));
+                if (playerHp <= 0) gameOver = true;
+            } else {
+                splashes.push(new Splash(ep.x, ep.y));
+                if (typeof playSplashSound === 'function') playSplashSound();
+            }
+        } else {
+            activeEnemyProjectiles.push(ep);
+        }
+    });
+    enemyProjectiles = activeEnemyProjectiles;
+
     ships.forEach(ship => ship.update());
     ships = ships.filter(ship => !ship.isOffScreen());
 
@@ -999,6 +1034,8 @@ function update() {
                 crackGlass(bomb.x, bomb.y); // Shatter the screen!
                 shakeIntensity = 25; // Massive screen shake
                 credits = Math.max(0, credits - 20); // Big penalty
+                playerHp -= 2;
+                if (playerHp <= 0) gameOver = true;
                 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             }
         }
@@ -1335,6 +1372,7 @@ function draw() {
 
     // Draw projectiles (not clipped, so they wrap around the bottom area)
     projectiles.forEach(proj => proj.draw());
+    enemyProjectiles.forEach(ep => ep.draw());
 
     ctx.restore(); // Restore from Zoom to projectiles so it doesn't affect the UI and crosshair!
 
@@ -2301,23 +2339,23 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 260, 500, 520);
+        ctx.fillRect(canvas.width / 2 - 250, canvas.height / 2 - 300, 500, 560);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 260, 500, 520);
+        ctx.strokeRect(canvas.width / 2 - 250, canvas.height / 2 - 300, 500, 560);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 210);
+        ctx.fillText('UPGRADES', canvas.width / 2, canvas.height / 2 - 250);
         
         ctx.font = '20px monospace';
-        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 170);
+        ctx.fillText(`Credits: $${credits}`, canvas.width / 2, canvas.height / 2 - 210);
 
         // Upgrade 1
         const u1X = canvas.width / 2 - 230;
-        const u1Y = canvas.height / 2 - 120;
+        const u1Y = canvas.height / 2 - 160;
         const canBuyU1 = credits >= 50 && projSpeedBonus < 5;
         ctx.fillStyle = canBuyU1 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u1X, u1Y, 460, 50);
@@ -2332,7 +2370,7 @@ function draw() {
 
         // Upgrade 2
         const u2X = canvas.width / 2 - 230;
-        const u2Y = canvas.height / 2 - 50;
+        const u2Y = canvas.height / 2 - 90;
         ctx.fillStyle = credits >= 75 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u2X, u2Y, 460, 50);
         ctx.strokeStyle = credits >= 75 ? '#00ff00' : '#888';
@@ -2346,7 +2384,7 @@ function draw() {
         
         // Upgrade 3
         const u3X = canvas.width / 2 - 230;
-        const u3Y = canvas.height / 2 + 20;
+        const u3Y = canvas.height / 2 - 20;
         const canBuyU3 = credits >= 100 && radarBonus < 5;
         ctx.fillStyle = canBuyU3 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u3X, u3Y, 460, 50);
@@ -2361,7 +2399,7 @@ function draw() {
         
         // Upgrade 4
         const u4X = canvas.width / 2 - 230;
-        const u4Y = canvas.height / 2 + 90;
+        const u4Y = canvas.height / 2 + 50;
         const canBuyU4 = credits >= 125 && homingBonus < 5;
         ctx.fillStyle = canBuyU4 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
         ctx.fillRect(u4X, u4Y, 460, 50);
@@ -2374,12 +2412,27 @@ function draw() {
         ctx.textAlign = 'right';
         ctx.fillText(homingBonus >= 5 ? `MAX` : `Lvl ${homingBonus}`, u4X + 440, u4Y + 25);
         
+        // Upgrade 5
+        const u5X = canvas.width / 2 - 230;
+        const u5Y = canvas.height / 2 + 120;
+        const canBuyU5 = credits >= 150;
+        ctx.fillStyle = canBuyU5 ? 'rgba(0, 100, 0, 0.8)' : 'rgba(40, 40, 40, 0.8)';
+        ctx.fillRect(u5X, u5Y, 460, 50);
+        ctx.strokeStyle = canBuyU5 ? '#00ff00' : '#888';
+        ctx.strokeRect(u5X, u5Y, 460, 50);
+        ctx.fillStyle = canBuyU5 ? '#00ff00' : '#888';
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Reinforced Hull (+Max HP) [$150]`, u5X + 20, u5Y + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText(`Lvl ${hullBonus}`, u5X + 440, u5Y + 25);
+
         // Draw Close Upgrades Button
-        const closeUpgBtnY = canvas.height / 2 + 160;
+        const closeUpgBtnY = canvas.height / 2 + 190;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
-        ctx.fillRect(u2X, closeUpgBtnY, 460, 50);
+        ctx.fillRect(u1X, closeUpgBtnY, 460, 50);
         ctx.strokeStyle = '#00ff00';
-        ctx.strokeRect(u2X, closeUpgBtnY, 460, 50);
+        ctx.strokeRect(u1X, closeUpgBtnY, 460, 50);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 18px monospace';
@@ -2471,6 +2524,28 @@ function draw() {
     else if (weaponType === 'homing') btnText = `Homing (${homingAmmo})`;
     ctx.fillText(btnText, btnX + btnWidth / 2, btnY + btnHeight / 2);
 
+    // Draw Player Health Bar
+    const hpBarW = 300;
+    const hpBarH = 15;
+    const hpBarX = canvas.width / 2 - hpBarW / 2;
+    const hpBarY = canvas.height / 2 + 365;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+    ctx.fillStyle = '#880000';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+    ctx.fillStyle = nightVisionEnabled ? '#00ff00' : '#00aa00';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW * Math.max(0, playerHp / playerMaxHp), hpBarH);
+    ctx.strokeStyle = nightVisionEnabled ? '#00ff00' : '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+    
+    ctx.fillStyle = nightVisionEnabled ? '#000000' : '#ffffff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`HULL INTEGRITY: ${Math.max(0, playerHp)} / ${playerMaxHp}`, hpBarX + hpBarW / 2, hpBarY + hpBarH / 2);
+
     ctx.restore(); // Restore from Screen Shake
     ctx.restore(); // Restore from Global Zoom
 
@@ -2559,6 +2634,25 @@ canvas.addEventListener('click', (e) => {
     const cyPhysical = (e.clientY - rect.top) * scaleY;
     const cx = (cxPhysical - cxCenter) / globalZoomLevel + cxCenter;
     const cy = (cyPhysical - cyCenter) / globalZoomLevel + cyCenter;
+
+    if (gameOver) {
+        const restartBtnW = 280;
+        const restartBtnH = 60;
+        const restartBtnX = canvas.width / 2 - restartBtnW / 2;
+        const restartBtnY = canvas.height / 2 + 100;
+        
+        if (cxPhysical >= restartBtnX && cxPhysical <= restartBtnX + restartBtnW && cyPhysical >= restartBtnY && cyPhysical <= restartBtnY + restartBtnH) {
+            playerHp = playerMaxHp;
+            gameOver = false;
+            ships = []; enemyProjectiles = []; projectiles = []; explosions = [];
+            crates = []; mines = []; planes = []; bombs = [];
+            score = 0; credits = 0;
+            dreadnoughtActive = false; juggernautActive = false;
+            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (typeof playSonarPing === 'function') playSonarPing('ship');
+        }
+        return; // Consume click
+    }
 
     if (isTutorialOpen) {
         const skipBtnW = 240;
@@ -2703,7 +2797,7 @@ canvas.addEventListener('click', (e) => {
     if (isUpgradesOpen) {
         // Check Upgrade 1 click
         const u1X = canvas.width / 2 - 230;
-        const u1Y = canvas.height / 2 - 120;
+        const u1Y = canvas.height / 2 - 160;
         if (cx >= u1X && cx <= u1X + 460 && cy >= u1Y && cy <= u1Y + 50) {
             if (credits >= 50 && projSpeedBonus < 5) {
                 credits -= 50;
@@ -2714,7 +2808,7 @@ canvas.addEventListener('click', (e) => {
         
         // Check Upgrade 2 click
         const u2X = canvas.width / 2 - 230;
-        const u2Y = canvas.height / 2 - 50;
+        const u2Y = canvas.height / 2 - 90;
         if (cx >= u2X && cx <= u2X + 460 && cy >= u2Y && cy <= u2Y + 50) {
             if (credits >= 75) {
                 credits -= 75;
@@ -2725,7 +2819,7 @@ canvas.addEventListener('click', (e) => {
         
         // Check Upgrade 3 click
         const u3X = canvas.width / 2 - 230;
-        const u3Y = canvas.height / 2 + 20;
+        const u3Y = canvas.height / 2 - 20;
         if (cx >= u3X && cx <= u3X + 460 && cy >= u3Y && cy <= u3Y + 50) {
             if (credits >= 100 && radarBonus < 5) {
                 credits -= 100;
@@ -2736,7 +2830,7 @@ canvas.addEventListener('click', (e) => {
         
         // Check Upgrade 4 click
         const u4X = canvas.width / 2 - 230;
-        const u4Y = canvas.height / 2 + 90;
+        const u4Y = canvas.height / 2 + 50;
         if (cx >= u4X && cx <= u4X + 460 && cy >= u4Y && cy <= u4Y + 50) {
             if (credits >= 125 && homingBonus < 5) {
                 credits -= 125;
@@ -2748,9 +2842,22 @@ canvas.addEventListener('click', (e) => {
             }
         }
         
+        // Check Upgrade 5 click
+        const u5X = canvas.width / 2 - 230;
+        const u5Y = canvas.height / 2 + 120;
+        if (cx >= u5X && cx <= u5X + 460 && cy >= u5Y && cy <= u5Y + 50) {
+            if (credits >= 150) {
+                credits -= 150;
+                hullBonus++;
+                playerMaxHp += 10;
+                playerHp += 10;
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
+        }
+
         // Check Close Upgrades click
-        const closeUpgBtnY = canvas.height / 2 + 160;
-        if (cx >= u2X && cx <= u2X + 460 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
+        const closeUpgBtnY = canvas.height / 2 + 190;
+        if (cx >= u1X && cx <= u1X + 460 && cy >= closeUpgBtnY && cy <= closeUpgBtnY + 50) {
             isUpgradesOpen = false;
         }
         return; // Prevent shooting while upgrades menu is open
@@ -2818,6 +2925,7 @@ canvas.addEventListener('click', (e) => {
                     ammoBonus = savedData.ammoBonus || 0;
                     radarBonus = savedData.radarBonus || 0;
                     homingBonus = savedData.homingBonus || 0;
+                    hullBonus = savedData.hullBonus || 0;
                     tripleAmmo = savedData.tripleAmmo || 40;
                     homingAmmo = savedData.homingAmmo || 0;
                     weaponType = savedData.weaponType || 'single';
@@ -2831,6 +2939,13 @@ canvas.addEventListener('click', (e) => {
                         const label = document.getElementById('master-label');
                         if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
                     }
+                    if (savedData.playerHp !== undefined) playerHp = savedData.playerHp;
+                    if (savedData.playerMaxHp !== undefined) playerMaxHp = savedData.playerMaxHp;
+                    if (playerMaxHp === 10 || playerMaxHp === 40) {
+                        playerMaxHp = 50;
+                        playerHp = 50;
+                    }
+                    if (playerHp <= 0) playerHp = playerMaxHp;
                 } else {
                     score = 0;
                     highScore = 0;
@@ -2839,6 +2954,7 @@ canvas.addEventListener('click', (e) => {
                     ammoBonus = 0;
                     radarBonus = 0;
                     homingBonus = 0;
+                    hullBonus = 0;
                     tripleAmmo = 40;
                     homingAmmo = 0;
                     weaponType = 'single';
@@ -2851,9 +2967,12 @@ canvas.addEventListener('click', (e) => {
                     if (slider) slider.value = masterVolume;
                     const label = document.getElementById('master-label');
                     if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
+                    playerMaxHp = 50;
+                    playerHp = 50;
                 }
             } catch(e) {}
-            ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = [];
+            ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = []; enemyProjectiles = [];
+            gameOver = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             isMenuOpen = false;
         }
@@ -2887,7 +3006,42 @@ canvas.addEventListener('click', (e) => {
 function gameLoop() {
     const bossBtnHtml = document.getElementById('boss-btn-html');
     if (bossBtnHtml) {
-        bossBtnHtml.style.display = (isTutorialOpen || !gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen) ? 'none' : 'block';
+        bossBtnHtml.style.display = (isTutorialOpen || !gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen || gameOver) ? 'none' : 'block';
+    }
+
+    if (gameOver) {
+        draw(); // Draw the background/game state
+        ctx.save();
+        ctx.fillStyle = 'rgba(100, 0, 0, 0.6)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#ff0000';
+        ctx.font = 'bold 60px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 10;
+        ctx.fillText('HULL BREACHED', canvas.width / 2, canvas.height / 2 - 40);
+        ctx.fillText('SUBMARINE DESTROYED', canvas.width / 2, canvas.height / 2 + 20);
+        
+        const restartBtnW = 280;
+        const restartBtnH = 60;
+        const restartBtnX = canvas.width / 2 - restartBtnW / 2;
+        const restartBtnY = canvas.height / 2 + 100;
+        
+        ctx.fillStyle = 'rgba(150, 0, 0, 0.9)';
+        ctx.fillRect(restartBtnX, restartBtnY, restartBtnW, restartBtnH);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(restartBtnX, restartBtnY, restartBtnW, restartBtnH);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText('RESTART', canvas.width / 2, restartBtnY + restartBtnH / 2);
+        
+        ctx.restore();
+        requestAnimationFrame(gameLoop);
+        return;
     }
 
     if (isTutorialOpen) {

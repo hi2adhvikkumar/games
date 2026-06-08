@@ -149,6 +149,7 @@ class Ship {
             this.hp = 1; // Takes 1 hit
         }
         this.light = Math.random() < 0.25; // 25% chance to be lighter
+        this.fireTimer = Math.random() * 120 + 60; // Initial firing delay
     }
 
     update() {
@@ -159,6 +160,25 @@ class Ship {
                 this.planeTimer = 0;
                 if (planes.length < 6) { // Carriers can launch more planes into the sky
                     planes.push(new Plane(this.x, this.y - this.height));
+                }
+            }
+        }
+        
+        // Enemy Firing Logic
+        if (this.type !== 'civilian' && this.type !== 'submarine') {
+            this.fireTimer--;
+            if (this.fireTimer <= 0) {
+                this.fireTimer = Math.random() * 150 + (this.type === 'juggernaut' ? 40 : (this.type === 'dreadnought' ? 60 : 100));
+                if (typeof enemyProjectiles !== 'undefined' && this.x > viewLeft && this.x < viewRight) {
+                    if (this.type === 'juggernaut') {
+                        enemyProjectiles.push(new EnemyProjectile(this.x - 100, this.y));
+                        enemyProjectiles.push(new EnemyProjectile(this.x + 100, this.y));
+                    } else if (this.type === 'dreadnought') {
+                        enemyProjectiles.push(new EnemyProjectile(this.x - 50, this.y));
+                        enemyProjectiles.push(new EnemyProjectile(this.x + 50, this.y));
+                    } else {
+                        enemyProjectiles.push(new EnemyProjectile(this.x, this.y));
+                    }
                 }
             }
         }
@@ -1159,5 +1179,53 @@ class Flare {
 
     isDead() {
         return this.life <= 0 || (this.active && this.y > horizonY);
+    }
+}
+
+class EnemyProjectile {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.targetX = canvas.width / 2;
+        this.targetY = canvas.height / 2 + 300; // Turret
+        
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const angle = Math.atan2(dy, dx);
+        const speed = 4 + Math.random() * 2;
+        
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.distance = Math.hypot(dx, dy);
+        this.traveled = 0;
+        this.speed = speed;
+        this.radius = 2;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.traveled += this.speed;
+        this.radius = 2 + (this.traveled / this.distance) * 8; 
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.fillStyle = '#ffaa00';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    hasHit() {
+        return this.traveled >= this.distance;
     }
 }
