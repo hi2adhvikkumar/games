@@ -95,7 +95,7 @@ window.addEventListener('keydown', (e) => {
                 weaponType, nextBossScore, nextJuggernautScore, masterVolume,
                 playerHp, playerMaxHp, hullBonus
             };
-            localStorage.setItem('warshipSaveData', JSON.stringify(saveData));
+            localStorage.setItem('warshipSaveData_' + username, JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
             if (typeof stickyMessages !== 'undefined') {
                 stickyMessages[0] = "PROGRESS\nSAVED!";
@@ -212,7 +212,8 @@ const addBossBtn = () => {
 addBossBtn();
 
 let score = 0;
-let highScore = parseInt(localStorage.getItem('warshipHighScore')) || 0;
+let username = localStorage.getItem('warshipUsername') || 'Guest';
+let highScore = parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
 let credits = 0;
 let projSpeedBonus = 0;
 let ammoBonus = 0;
@@ -253,32 +254,49 @@ let gameOver = false;
 let enemyProjectiles = [];
 
 // Load saved data if it exists
-try {
-    const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
-    if (savedData) {
-        score = savedData.score || 0;
-        highScore = savedData.highScore || highScore;
-        credits = savedData.credits || 0;
-        projSpeedBonus = savedData.projSpeedBonus || 0;
-        ammoBonus = savedData.ammoBonus || 0;
-        radarBonus = savedData.radarBonus || 0;
-        homingBonus = savedData.homingBonus || 0;
-        hullBonus = savedData.hullBonus || 0;
-        tripleAmmo = savedData.tripleAmmo || 40;
-        homingAmmo = savedData.homingAmmo || 0;
-        weaponType = savedData.weaponType || 'single';
-        nextBossScore = savedData.nextBossScore || 20;
-        nextJuggernautScore = savedData.nextJuggernautScore || 100;
-        masterVolume = savedData.masterVolume !== undefined ? savedData.masterVolume : 1.0;
-        if (savedData.playerHp !== undefined) playerHp = savedData.playerHp;
-        if (savedData.playerMaxHp !== undefined) playerMaxHp = savedData.playerMaxHp;
-        if (playerMaxHp === 10 || playerMaxHp === 40) {
-            playerMaxHp = 50;
-            playerHp = 50;
+function loadUserData() {
+    try {
+        const savedData = JSON.parse(localStorage.getItem('warshipSaveData_' + username)) || (username === 'Guest' ? JSON.parse(localStorage.getItem('warshipSaveData')) : null);
+        if (savedData) {
+            score = savedData.score || 0;
+            highScore = savedData.highScore || parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
+            credits = savedData.credits || 0;
+            projSpeedBonus = savedData.projSpeedBonus || 0;
+            ammoBonus = savedData.ammoBonus || 0;
+            radarBonus = savedData.radarBonus || 0;
+            homingBonus = savedData.homingBonus || 0;
+            hullBonus = savedData.hullBonus || 0;
+            tripleAmmo = savedData.tripleAmmo || 40;
+            homingAmmo = savedData.homingAmmo || 0;
+            weaponType = savedData.weaponType || 'single';
+            nextBossScore = savedData.nextBossScore || 20;
+            nextJuggernautScore = savedData.nextJuggernautScore || 100;
+            if (savedData.masterVolume !== undefined) {
+                masterVolume = savedData.masterVolume;
+                if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
+                const slider = document.getElementById('master-slider');
+                if (slider) slider.value = masterVolume;
+                const label = document.getElementById('master-label');
+                if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
+            }
+            if (savedData.playerHp !== undefined) playerHp = savedData.playerHp;
+            if (savedData.playerMaxHp !== undefined) playerMaxHp = savedData.playerMaxHp;
+            if (playerMaxHp === 10 || playerMaxHp === 40) {
+                playerMaxHp = 50;
+                playerHp = 50;
+            }
+            if (playerHp <= 0) playerHp = playerMaxHp; // Don't load directly into a game over
+        } else {
+            score = 0; credits = 0; projSpeedBonus = 0; ammoBonus = 0;
+            radarBonus = 0; homingBonus = 0; hullBonus = 0;
+            tripleAmmo = 40; homingAmmo = 0; weaponType = 'single';
+            nextBossScore = 20; nextJuggernautScore = 100;
+            playerMaxHp = 50; playerHp = 50;
         }
-        if (playerHp <= 0) playerHp = playerMaxHp; // Don't load directly into a game over
-    }
-} catch(e) {}
+        highScore = parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
+    } catch(e) {}
+}
+loadUserData();
 
 const addVolumeSlider = () => {
     if (document.getElementById('volume-container')) return;
@@ -707,7 +725,7 @@ function checkCollisions() {
                     
                     if (score > highScore) {
                         highScore = score;
-                        localStorage.setItem('warshipHighScore', highScore);
+                        localStorage.setItem('warshipHighScore_' + username, highScore);
                     }
                     scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
                 }
@@ -737,7 +755,7 @@ function checkCollisions() {
                     checkBossTriggers();
                     if (score > highScore) {
                         highScore = score;
-                        localStorage.setItem('warshipHighScore', highScore);
+                        localStorage.setItem('warshipHighScore_' + username, highScore);
                     }
                     scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
                 }
@@ -853,7 +871,7 @@ function checkCollisions() {
                 
                 if (score > highScore) {
                     highScore = score;
-                    localStorage.setItem('warshipHighScore', highScore);
+                    localStorage.setItem('warshipHighScore_' + username, highScore);
                 }
                 scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
                 
@@ -1953,7 +1971,16 @@ function draw() {
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
 
-    // Draw San Jose (PT) Time in the top-right corner
+    // Draw Account Info in the very top-right corner
+    ctx.save();
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`Account: ${username}`, canvas.width - 20, 20);
+    ctx.restore();
+
+    // Draw San Jose (PT) Time in the very top-right corner
     ctx.save();
     const sjTime = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Los_Angeles',
@@ -1965,9 +1992,9 @@ function draw() {
 
     ctx.fillStyle = '#00ff00';
     ctx.font = 'bold 24px monospace';
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText(sjTime + ' PT', canvas.width / 2 + 320, canvas.height / 2 - 300);
+    ctx.fillText(sjTime + ' PT', canvas.width - 20, 50);
     ctx.restore();
 
     // Draw Score and Credits on the left side of the periscope view
@@ -2742,12 +2769,26 @@ canvas.addEventListener('click', (e) => {
         const tutBtnX = canvas.width / 2 - tutBtnW / 2;
         const tutBtnY = canvas.height / 2 + 80;
 
+        const loginBtnW = 280;
+        const loginBtnH = 40;
+        const loginBtnX = canvas.width / 2 - loginBtnW / 2;
+        const loginBtnY = canvas.height / 2 + 130;
+
         if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
             gameStarted = true;
         } else if (cx >= tutBtnX && cx <= tutBtnX + tutBtnW && cy >= tutBtnY && cy <= tutBtnY + tutBtnH) {
             isTutorialOpen = true;
+            playSonarPing('ship');
+        } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
+            let newName = prompt("Enter your username:", username);
+            if (newName && newName.trim() !== '') {
+                username = newName.trim();
+                localStorage.setItem('warshipUsername', username);
+                loadUserData();
+                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
             playSonarPing('ship');
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
@@ -2915,62 +2956,7 @@ canvas.addEventListener('click', (e) => {
         // Check Reset Progress click
         const resetBtnY = canvas.height / 2 + 165;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
-            try {
-                const savedData = JSON.parse(localStorage.getItem('warshipSaveData'));
-                if (savedData) {
-                    score = savedData.score || 0;
-                    highScore = savedData.highScore || highScore;
-                    credits = savedData.credits || 0;
-                    projSpeedBonus = savedData.projSpeedBonus || 0;
-                    ammoBonus = savedData.ammoBonus || 0;
-                    radarBonus = savedData.radarBonus || 0;
-                    homingBonus = savedData.homingBonus || 0;
-                    hullBonus = savedData.hullBonus || 0;
-                    tripleAmmo = savedData.tripleAmmo || 40;
-                    homingAmmo = savedData.homingAmmo || 0;
-                    weaponType = savedData.weaponType || 'single';
-                    nextBossScore = savedData.nextBossScore || 20;
-                    nextJuggernautScore = savedData.nextJuggernautScore || 100;
-                    if (savedData.masterVolume !== undefined) {
-                        masterVolume = savedData.masterVolume;
-                        if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
-                        const slider = document.getElementById('master-slider');
-                        if (slider) slider.value = masterVolume;
-                        const label = document.getElementById('master-label');
-                        if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
-                    }
-                    if (savedData.playerHp !== undefined) playerHp = savedData.playerHp;
-                    if (savedData.playerMaxHp !== undefined) playerMaxHp = savedData.playerMaxHp;
-                    if (playerMaxHp === 10 || playerMaxHp === 40) {
-                        playerMaxHp = 50;
-                        playerHp = 50;
-                    }
-                    if (playerHp <= 0) playerHp = playerMaxHp;
-                } else {
-                    score = 0;
-                    highScore = 0;
-                    credits = 0;
-                    projSpeedBonus = 0;
-                    ammoBonus = 0;
-                    radarBonus = 0;
-                    homingBonus = 0;
-                    hullBonus = 0;
-                    tripleAmmo = 40;
-                    homingAmmo = 0;
-                    weaponType = 'single';
-                    nextBossScore = 20;
-                    nextJuggernautScore = 100;
-                    localStorage.setItem('warshipHighScore', 0);
-                    masterVolume = 1.0;
-                    if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
-                    const slider = document.getElementById('master-slider');
-                    if (slider) slider.value = masterVolume;
-                    const label = document.getElementById('master-label');
-                    if (label) label.style.color = masterVolume === 0 ? '#ff0000' : '#d0d8dc';
-                    playerMaxHp = 50;
-                    playerHp = 50;
-                }
-            } catch(e) {}
+            loadUserData();
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = []; enemyProjectiles = [];
             gameOver = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
@@ -3140,9 +3126,25 @@ function gameLoop() {
         ctx.font = 'bold 18px monospace';
         ctx.fillText('HOW TO PLAY', canvas.width / 2, tutBtnY + tutBtnH / 2);
         
+        // Draw Login Button
+        const loginBtnW = 280;
+        const loginBtnH = 40;
+        const loginBtnX = canvas.width / 2 - loginBtnW / 2;
+        const loginBtnY = canvas.height / 2 + 130;
+        
+        ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 100, 0, 0.9)';
+        ctx.fillRect(loginBtnX, loginBtnY, loginBtnW, loginBtnH);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(loginBtnX, loginBtnY, loginBtnW, loginBtnH);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText(`LOGIN: ${username}`, canvas.width / 2, loginBtnY + loginBtnH / 2);
+        
         ctx.fillStyle = '#00ff00';
         ctx.font = '16px monospace';
-        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 150);
+        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 200);
         ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
