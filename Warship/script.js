@@ -222,10 +222,12 @@ const addFooterLinks = () => {
     
     const privacyLink = document.createElement('a');
     privacyLink.href = 'privacy.html';
+    privacyLink.target = '_blank';
     privacyLink.textContent = 'Privacy Policy';
     
     const termsLink = document.createElement('a');
     termsLink.href = 'terms.html';
+    termsLink.target = '_blank';
     termsLink.textContent = 'Terms of Service';
     
     container.appendChild(privacyLink);
