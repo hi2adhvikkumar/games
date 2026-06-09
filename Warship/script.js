@@ -211,6 +211,59 @@ const addBossBtn = () => {
 };
 addBossBtn();
 
+const addFooterLinks = () => {
+    if (document.getElementById('footer-links')) return;
+    if (!document.body) {
+        setTimeout(addFooterLinks, 50); // Wait until body exists
+        return;
+    }
+    const container = document.createElement('div');
+    container.id = 'footer-links';
+    
+    const privacyLink = document.createElement('a');
+    privacyLink.href = 'privacy.html';
+    privacyLink.textContent = 'Privacy Policy';
+    
+    const termsLink = document.createElement('a');
+    termsLink.href = 'terms.html';
+    termsLink.textContent = 'Terms of Service';
+    
+    container.appendChild(privacyLink);
+    container.appendChild(termsLink);
+    document.body.appendChild(container);
+};
+addFooterLinks();
+
+// Google Sign-In Initialization
+const googleClientId = 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com'; // Replace with your Google Client ID
+function decodeJwtResponse(token) {
+    let base64Url = token.split('.')[1];
+    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    let jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+}
+
+function handleGoogleLogin(response) {
+    const payload = decodeJwtResponse(response.credential);
+    username = payload.name; // Use Google account name
+    localStorage.setItem('warshipUsername', username);
+    loadUserData();
+    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+    if (typeof playSonarPing === 'function') playSonarPing('ship');
+}
+
+function initGoogleSignIn() {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+    script.onload = () => { google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleLogin }); };
+}
+initGoogleSignIn();
+
 let score = 0;
 let username = localStorage.getItem('warshipUsername') || 'Guest';
 let highScore = parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
@@ -701,7 +754,7 @@ function checkCollisions() {
                     } else {
                         score += 1; // Reward for normal ships
                         if (ship.type === 'juggernaut') {
-                            for (let step = -200; step <= 200; step += 80) {
+                            for (let step = -350; step <= 350; step += 80) {
                                 explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
                             }
                             playMassiveExplosionSound();
@@ -844,7 +897,7 @@ function checkCollisions() {
                             } else {
                                 score += 1;
                                 if (ship.type === 'juggernaut') {
-                                    for (let step = -200; step <= 200; step += 80) {
+                                    for (let step = -350; step <= 350; step += 80) {
                                         explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
                                     }
                                     playMassiveExplosionSound();
@@ -2774,6 +2827,11 @@ canvas.addEventListener('click', (e) => {
         const loginBtnX = canvas.width / 2 - loginBtnW / 2;
         const loginBtnY = canvas.height / 2 + 130;
 
+        const mpBtnW = 280;
+        const mpBtnH = 40;
+        const mpBtnX = canvas.width / 2 - mpBtnW / 2;
+        const mpBtnY = canvas.height / 2 + 180;
+
         if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
@@ -2782,13 +2840,30 @@ canvas.addEventListener('click', (e) => {
             isTutorialOpen = true;
             playSonarPing('ship');
         } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
-            let newName = prompt("Enter your username:", username);
-            if (newName && newName.trim() !== '') {
-                username = newName.trim();
-                localStorage.setItem('warshipUsername', username);
-                loadUserData();
-                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                        let newName = prompt("Google Sign-In skipped/unavailable. Enter username manually:", username);
+                        if (newName && newName.trim() !== '') {
+                            username = newName.trim();
+                            localStorage.setItem('warshipUsername', username);
+                            loadUserData();
+                            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                        }
+                    }
+                });
+            } else {
+                let newName = prompt("Enter your username:", username);
+                if (newName && newName.trim() !== '') {
+                    username = newName.trim();
+                    localStorage.setItem('warshipUsername', username);
+                    loadUserData();
+                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                }
             }
+            playSonarPing('ship');
+        } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
+            alert("Multiplayer mode is coming soon!");
             playSonarPing('ship');
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
@@ -3140,11 +3215,28 @@ function gameLoop() {
         
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px monospace';
-        ctx.fillText(`LOGIN: ${username}`, canvas.width / 2, loginBtnY + loginBtnH / 2);
+        const loginText = username === 'Guest' ? 'SIGN IN WITH GOOGLE' : `USER: ${username.length > 12 ? username.substring(0, 10) + '...' : username}`;
+        ctx.fillText(loginText, canvas.width / 2, loginBtnY + loginBtnH / 2);
+        
+        // Draw Multiplayer Button
+        const mpBtnW = 280;
+        const mpBtnH = 40;
+        const mpBtnX = canvas.width / 2 - mpBtnW / 2;
+        const mpBtnY = canvas.height / 2 + 180;
+        
+        ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 140, 0, 0.9)';
+        ctx.fillRect(mpBtnX, mpBtnY, mpBtnW, mpBtnH);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(mpBtnX, mpBtnY, mpBtnW, mpBtnH);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('MULTIPLAYER', canvas.width / 2, mpBtnY + mpBtnH / 2);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = '16px monospace';
-        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 200);
+        ctx.fillText('(Or click anywhere else to play normally)', canvas.width / 2, canvas.height / 2 + 240);
         ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
