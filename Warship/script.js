@@ -93,7 +93,7 @@ window.addEventListener('keydown', (e) => {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
                 radarBonus, homingBonus, tripleAmmo, homingAmmo, 
                 weaponType, nextBossScore, nextJuggernautScore, masterVolume,
-                playerHp, playerMaxHp, hullBonus
+                playerHp, playerMaxHp, hullBonus, screenShakeEnabled
             };
             localStorage.setItem('warshipSaveData_' + username, JSON.stringify(saveData));
             playSonarPing('ship'); // Audio feedback
@@ -307,6 +307,7 @@ let playerMaxHp = 50;
 let playerHp = 50;
 let gameOver = false;
 let enemyProjectiles = [];
+let screenShakeEnabled = true;
 
 // Load saved data if it exists
 function loadUserData() {
@@ -326,6 +327,7 @@ function loadUserData() {
             weaponType = savedData.weaponType || 'single';
             nextBossScore = savedData.nextBossScore || 20;
             nextJuggernautScore = savedData.nextJuggernautScore || 100;
+            if (savedData.screenShakeEnabled !== undefined) screenShakeEnabled = savedData.screenShakeEnabled;
             if (savedData.masterVolume !== undefined) {
                 masterVolume = savedData.masterVolume;
                 if (typeof updateMasterVolume === 'function') updateMasterVolume(masterVolume);
@@ -347,6 +349,7 @@ function loadUserData() {
             tripleAmmo = 40; homingAmmo = 0; weaponType = 'single';
             nextBossScore = 20; nextJuggernautScore = 100;
             playerMaxHp = 50; playerHp = 50;
+            screenShakeEnabled = true;
         }
         highScore = parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
     } catch(e) {}
@@ -1229,8 +1232,8 @@ function draw() {
     let currentShakeX = 0;
     let currentShakeY = 0;
     if (shakeIntensity > 0) {
-        currentShakeX = (Math.random() - 0.5) * shakeIntensity;
-        currentShakeY = (Math.random() - 0.5) * shakeIntensity;
+        currentShakeX = screenShakeEnabled ? (Math.random() - 0.5) * shakeIntensity : 0;
+        currentShakeY = screenShakeEnabled ? (Math.random() - 0.5) * shakeIntensity : 0;
         ctx.translate(currentShakeX, currentShakeY);
     }
 
@@ -2267,10 +2270,10 @@ function draw() {
         ctx.fillRect(vLeft, vTop, vW, vH);
         
         ctx.fillStyle = 'rgba(0, 40, 0, 0.9)';
-        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
+        ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 435);
+        ctx.strokeRect(canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 480);
         
         ctx.fillStyle = '#00ff00';
         ctx.font = 'bold 30px monospace';
@@ -2336,8 +2339,18 @@ function draw() {
         ctx.font = '16px monospace';
         ctx.fillText(`B&W Theme: ${blackAndWhiteEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, bwBtnY + nvBtnH / 2);
 
+        // Draw Screen Shake Toggle Button
+        const shakeBtnY = canvas.height / 2 + 165;
+        ctx.fillStyle = screenShakeEnabled ? 'rgba(0, 40, 0, 0.8)' : '#ffffff';
+        ctx.fillRect(nvBtnX, shakeBtnY, nvBtnW, nvBtnH);
+        ctx.strokeStyle = '#00ff00';
+        ctx.strokeRect(nvBtnX, shakeBtnY, nvBtnW, nvBtnH);
+        ctx.fillStyle = screenShakeEnabled ? '#00ff00' : 'black';
+        ctx.font = '16px monospace';
+        ctx.fillText(`Screen Shake: ${screenShakeEnabled ? 'ON' : 'OFF'}`, canvas.width / 2, shakeBtnY + nvBtnH / 2);
+
         // Draw Reset Progress Button
-        const resetBtnY = canvas.height / 2 + 165;
+        const resetBtnY = canvas.height / 2 + 210;
         ctx.fillStyle = 'rgba(100, 0, 0, 0.8)';
         ctx.fillRect(nvBtnX, resetBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#ff0000';
@@ -2347,7 +2360,7 @@ function draw() {
         ctx.fillText('Load Save / Reset', canvas.width / 2, resetBtnY + nvBtnH / 2);
 
         // Draw Close Menu Button
-        const closeMenuBtnY = canvas.height / 2 + 210;
+        const closeMenuBtnY = canvas.height / 2 + 255;
         ctx.fillStyle = 'rgba(0, 40, 0, 0.8)';
         ctx.fillRect(nvBtnX, closeMenuBtnY, nvBtnW, nvBtnH);
         ctx.strokeStyle = '#00ff00';
@@ -3038,8 +3051,14 @@ canvas.addEventListener('click', (e) => {
             if (typeof updateAudioTheme === 'function') updateAudioTheme(blackAndWhiteEnabled);
         }
         
+        // Check Screen Shake click
+        const shakeBtnY = canvas.height / 2 + 165;
+        if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= shakeBtnY && cy <= shakeBtnY + nvBtnH) {
+            screenShakeEnabled = !screenShakeEnabled;
+        }
+        
         // Check Reset Progress click
-        const resetBtnY = canvas.height / 2 + 165;
+        const resetBtnY = canvas.height / 2 + 210;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
             loadUserData();
             ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = []; enemyProjectiles = [];
@@ -3049,7 +3068,7 @@ canvas.addEventListener('click', (e) => {
         }
 
         // Check Close Menu click
-        const closeMenuBtnY = canvas.height / 2 + 210;
+        const closeMenuBtnY = canvas.height / 2 + 255;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= closeMenuBtnY && cy <= closeMenuBtnY + nvBtnH) {
             isMenuOpen = false;
         }
