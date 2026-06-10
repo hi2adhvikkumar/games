@@ -237,7 +237,7 @@ const addFooterLinks = () => {
 addFooterLinks();
 
 // Google Sign-In Initialization
-const googleClientId = 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com'; // Replace with your Google Client ID
+const googleClientId = '1234567890-abcdefg123456.apps.googleusercontent.com'; // Put your REAL Client ID here!
 function decodeJwtResponse(token) {
     let base64Url = token.split('.')[1];
     let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -1121,7 +1121,7 @@ function update() {
     splashes.forEach(splash => splash.update());
     splashes = splashes.filter(splash => !splash.isDead());
 
-    glassCracks.forEach(crack => crack.life -= 0.002); // Slowly fade out over time
+    glassCracks.forEach(crack => crack.life -= 1.0); // Instantly fade out over time
     glassCracks = glassCracks.filter(crack => crack.life > 0);
 
     clouds.forEach(cloud => {
@@ -2032,7 +2032,8 @@ function draw() {
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText(`Account: ${username}`, canvas.width - 20, 20);
+    const accountText = username === 'Guest' ? 'LOGIN / REGISTER' : `ACCOUNT: ${username}`;
+    ctx.fillText(accountText, canvas.width - 20, 20);
     ctx.restore();
 
     // Draw San Jose (PT) Time in the very top-right corner
@@ -2749,6 +2750,12 @@ canvas.addEventListener('click', (e) => {
         return;
     }
 
+    // Check if clicked on top right Account / Sign in text
+    if (cxPhysical >= canvas.width - 300 && cxPhysical <= canvas.width && cyPhysical >= 10 && cyPhysical <= 45) {
+        showLoginModal();
+        return;
+    }
+
     // Check if clicked on a gauge (tap the glass effect)
     const gaugeCenters = {
         pressure: { x: cxCenter - 535, y: cyCenter - 220 },
@@ -2814,22 +2821,22 @@ canvas.addEventListener('click', (e) => {
     }
 
     if (!gameStarted) {
-        const bossBtnW = 280;
+        const bossBtnW = 320;
         const bossBtnH = 60;
         const bossBtnX = canvas.width / 2 - bossBtnW / 2;
         const bossBtnY = canvas.height / 2 + 10;
         
-        const tutBtnW = 280;
+        const tutBtnW = 320;
         const tutBtnH = 40;
         const tutBtnX = canvas.width / 2 - tutBtnW / 2;
         const tutBtnY = canvas.height / 2 + 80;
 
-        const loginBtnW = 280;
+        const loginBtnW = 320;
         const loginBtnH = 40;
         const loginBtnX = canvas.width / 2 - loginBtnW / 2;
         const loginBtnY = canvas.height / 2 + 130;
 
-        const mpBtnW = 280;
+        const mpBtnW = 320;
         const mpBtnH = 40;
         const mpBtnX = canvas.width / 2 - mpBtnW / 2;
         const mpBtnY = canvas.height / 2 + 180;
@@ -2842,28 +2849,7 @@ canvas.addEventListener('click', (e) => {
             isTutorialOpen = true;
             playSonarPing('ship');
         } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
-            if (typeof google !== 'undefined' && google.accounts) {
-                google.accounts.id.prompt((notification) => {
-                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                        let newName = prompt("Google Sign-In skipped/unavailable. Enter username manually:", username);
-                        if (newName && newName.trim() !== '') {
-                            username = newName.trim();
-                            localStorage.setItem('warshipUsername', username);
-                            loadUserData();
-                            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-                        }
-                    }
-                });
-            } else {
-                let newName = prompt("Enter your username:", username);
-                if (newName && newName.trim() !== '') {
-                    username = newName.trim();
-                    localStorage.setItem('warshipUsername', username);
-                    loadUserData();
-                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-                }
-            }
-            playSonarPing('ship');
+            showLoginModal();
         } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
             alert("Multiplayer mode is coming soon!");
             playSonarPing('ship');
@@ -3172,7 +3158,7 @@ function gameLoop() {
         ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 60);
         
         // Draw Spawn Boss Button on the Start Screen
-        const bossBtnW = 280;
+        const bossBtnW = 320;
         const bossBtnH = 60;
         const bossBtnX = canvas.width / 2 - bossBtnW / 2;
         const bossBtnY = canvas.height / 2 + 10;
@@ -3188,7 +3174,7 @@ function gameLoop() {
         ctx.fillText('START & SPAWN BOSS', canvas.width / 2, bossBtnY + bossBtnH / 2);
         
         // Draw How to Play Button
-        const tutBtnW = 280;
+        const tutBtnW = 320;
         const tutBtnH = 40;
         const tutBtnX = canvas.width / 2 - tutBtnW / 2;
         const tutBtnY = canvas.height / 2 + 80;
@@ -3204,7 +3190,7 @@ function gameLoop() {
         ctx.fillText('HOW TO PLAY', canvas.width / 2, tutBtnY + tutBtnH / 2);
         
         // Draw Login Button
-        const loginBtnW = 280;
+        const loginBtnW = 320;
         const loginBtnH = 40;
         const loginBtnX = canvas.width / 2 - loginBtnW / 2;
         const loginBtnY = canvas.height / 2 + 130;
@@ -3217,11 +3203,11 @@ function gameLoop() {
         
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px monospace';
-        const loginText = username === 'Guest' ? 'SIGN IN WITH GOOGLE' : `USER: ${username.length > 12 ? username.substring(0, 10) + '...' : username}`;
+        const loginText = username === 'Guest' ? 'LOGIN / REGISTER' : `LOGGED IN: ${username.length > 12 ? username.substring(0, 9) + '...' : username}`;
         ctx.fillText(loginText, canvas.width / 2, loginBtnY + loginBtnH / 2);
         
         // Draw Multiplayer Button
-        const mpBtnW = 280;
+        const mpBtnW = 320;
         const mpBtnH = 40;
         const mpBtnX = canvas.width / 2 - mpBtnW / 2;
         const mpBtnY = canvas.height / 2 + 180;
