@@ -2752,7 +2752,17 @@ canvas.addEventListener('click', (e) => {
 
     // Check if clicked on top right Account / Sign in text
     if (cxPhysical >= canvas.width - 300 && cxPhysical <= canvas.width && cyPhysical >= 10 && cyPhysical <= 45) {
-        showLoginModal();
+        if (username === 'Guest') {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                google.accounts.id.prompt();
+            }
+        } else {
+            username = 'Guest';
+            localStorage.setItem('warshipUsername', username);
+            loadUserData();
+            if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+        }
+        if (typeof playSonarPing === 'function') playSonarPing('ship');
         return;
     }
 
@@ -2849,12 +2859,19 @@ canvas.addEventListener('click', (e) => {
             isTutorialOpen = true;
             playSonarPing('ship');
         } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
-            username = 'Guest';
-            localStorage.setItem('warshipUsername', username);
-            loadUserData();
-            if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (username === 'Guest') {
+                if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                    google.accounts.id.prompt();
+                } else {
+                    alert("Google Sign-In is not available right now. Please try again later.");
+                }
+            } else {
+                username = 'Guest';
+                localStorage.setItem('warshipUsername', username);
+                loadUserData();
+                if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            }
             if (typeof playSonarPing === 'function') playSonarPing('ship');
-            showLoginModal();
         } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
             alert("Multiplayer mode is coming soon!");
             playSonarPing('ship');
