@@ -237,7 +237,7 @@ const addFooterLinks = () => {
 addFooterLinks();
 
 // Google Sign-In Initialization
-const googleClientId = '1234567890-abcdefg123456.apps.googleusercontent.com'; // Put your REAL Client ID here!
+const googleClientId = '292579715803-ptvmg65mgl5ahlacn3bdm3aqftqg541u.apps.googleusercontent.com'; // Put your REAL Client ID here!
 function decodeJwtResponse(token) {
     let base64Url = token.split('.')[1];
     let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
