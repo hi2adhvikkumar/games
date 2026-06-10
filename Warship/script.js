@@ -307,7 +307,7 @@ let playerMaxHp = 50;
 let playerHp = 50;
 let gameOver = false;
 let enemyProjectiles = [];
-let screenShakeEnabled = true;
+let screenShakeEnabled = false;
 
 // Load saved data if it exists
 function loadUserData() {
@@ -349,7 +349,7 @@ function loadUserData() {
             tripleAmmo = 40; homingAmmo = 0; weaponType = 'single';
             nextBossScore = 20; nextJuggernautScore = 100;
             playerMaxHp = 50; playerHp = 50;
-            screenShakeEnabled = true;
+            screenShakeEnabled = false;
         }
         highScore = parseInt(localStorage.getItem('warshipHighScore_' + username)) || (username === 'Guest' ? parseInt(localStorage.getItem('warshipHighScore')) : 0) || 0;
     } catch(e) {}
