@@ -236,35 +236,71 @@ const addFooterLinks = () => {
 };
 addFooterLinks();
 
-// Google Sign-In Initialization
-const googleClientId = '292579715803-ptvmg65mgl5ahlacn3bdm3aqftqg541u.apps.googleusercontent.com'; // Put your REAL Client ID here!
-function decodeJwtResponse(token) {
-    let base64Url = token.split('.')[1];
-    let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    let jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
-}
+function showLoginModal() {
+    let modal = document.getElementById('login-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'login-modal';
+        Object.assign(modal.style, {
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: '320px', backgroundColor: 'rgba(0, 40, 0, 0.95)',
+            border: '2px solid #00ff00', color: '#00ff00', fontFamily: 'monospace', padding: '20px',
+            zIndex: '9999999', boxShadow: '0 0 20px #000', textAlign: 'center'
+        });
+        document.body.appendChild(modal);
 
-function handleGoogleLogin(response) {
-    const payload = decodeJwtResponse(response.credential);
-    username = payload.name; // Use Google account name
-    localStorage.setItem('warshipUsername', username);
-    loadUserData();
-    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-    if (typeof playSonarPing === 'function') playSonarPing('ship');
-}
+        modal.innerHTML = `
+            <h2 style="margin-top:0;">ACCOUNT LOGIN</h2>
+            <div style="text-align: left; margin-bottom: 10px;">
+                <label>Username / Email:</label><br>
+                <input type="text" id="login-email" style="width: 298px; padding: 5px; margin-top: 5px; background: #111; color: #00ff00; border: 1px solid #00ff00; outline: none; font-family: monospace;">
+            </div>
+            <div style="text-align: left; margin-bottom: 20px;">
+                <label>Password:</label><br>
+                <input type="password" id="login-password" style="width: 298px; padding: 5px; margin-top: 5px; background: #111; color: #00ff00; border: 1px solid #00ff00; outline: none; font-family: monospace;">
+            </div>
+            <button id="login-submit-btn" style="padding: 10px; width: 45%; background: rgba(0,100,0,0.8); color: #00ff00; border: 1px solid #00ff00; cursor: pointer; font-family: monospace; font-weight: bold; margin-right: 5%;">LOGIN</button>
+            <button id="login-close-btn" style="padding: 10px; width: 45%; background: rgba(100,0,0,0.8); color: #ff0000; border: 1px solid #ff0000; cursor: pointer; font-family: monospace; font-weight: bold;">CANCEL</button>
+            <div id="login-error" style="color: #ff0000; margin-top: 10px; font-size: 12px; height: 14px;"></div>
+        `;
 
-function initGoogleSignIn() {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-    script.onload = () => { google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleLogin }); };
+        document.getElementById('login-close-btn').onclick = () => {
+            modal.style.display = 'none';
+            document.getElementById('login-error').textContent = '';
+        };
+
+        document.getElementById('login-submit-btn').onclick = () => {
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-password').value;
+            if (!email || !pass) {
+                document.getElementById('login-error').textContent = 'Please enter a username and password.';
+                return;
+            }
+            
+            const savedPass = localStorage.getItem('warship_pass_' + email);
+            if (savedPass) {
+                if (savedPass !== pass) {
+                    document.getElementById('login-error').textContent = 'Incorrect password.';
+                    return;
+                }
+            } else {
+                localStorage.setItem('warship_pass_' + email, pass);
+            }
+
+            username = email;
+            localStorage.setItem('warshipUsername', username);
+            loadUserData();
+            if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (typeof playSonarPing === 'function') playSonarPing('ship');
+            modal.style.display = 'none';
+            document.getElementById('login-error').textContent = '';
+        };
+    }
+    document.getElementById('login-email').value = username === 'Guest' ? '' : username;
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').textContent = '';
+    modal.style.display = 'block';
 }
-initGoogleSignIn();
 
 let score = 0;
 let username = localStorage.getItem('warshipUsername') || 'Guest';
@@ -2766,16 +2802,14 @@ canvas.addEventListener('click', (e) => {
     // Check if clicked on top right Account / Sign in text
     if (cxPhysical >= canvas.width - 300 && cxPhysical <= canvas.width && cyPhysical >= 10 && cyPhysical <= 45) {
         if (username === 'Guest') {
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.prompt();
-            }
+            showLoginModal();
         } else {
             username = 'Guest';
             localStorage.setItem('warshipUsername', username);
             loadUserData();
             if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (typeof playSonarPing === 'function') playSonarPing('ship');
         }
-        if (typeof playSonarPing === 'function') playSonarPing('ship');
         return;
     }
 
@@ -2873,18 +2907,14 @@ canvas.addEventListener('click', (e) => {
             playSonarPing('ship');
         } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
             if (username === 'Guest') {
-                if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                    google.accounts.id.prompt();
-                } else {
-                    alert("Google Sign-In is not available right now. Please try again later.");
-                }
+                showLoginModal();
             } else {
                 username = 'Guest';
                 localStorage.setItem('warshipUsername', username);
                 loadUserData();
                 if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+                if (typeof playSonarPing === 'function') playSonarPing('ship');
             }
-            if (typeof playSonarPing === 'function') playSonarPing('ship');
         } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
             alert("Multiplayer mode is coming soon!");
             playSonarPing('ship');
