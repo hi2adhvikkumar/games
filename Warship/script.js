@@ -2849,6 +2849,11 @@ canvas.addEventListener('click', (e) => {
             isTutorialOpen = true;
             playSonarPing('ship');
         } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
+            username = 'Guest';
+            localStorage.setItem('warshipUsername', username);
+            loadUserData();
+            if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
+            if (typeof playSonarPing === 'function') playSonarPing('ship');
             showLoginModal();
         } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
             alert("Multiplayer mode is coming soon!");
@@ -3203,7 +3208,7 @@ function gameLoop() {
         
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px monospace';
-        const loginText = username === 'Guest' ? 'LOGIN / REGISTER' : `LOGGED IN: ${username.length > 12 ? username.substring(0, 9) + '...' : username}`;
+        const loginText = username === 'Guest' ? 'LOGIN / REGISTER' : `LOGOUT: ${username.length > 12 ? username.substring(0, 9) + '...' : username}`;
         ctx.fillText(loginText, canvas.width / 2, loginBtnY + loginBtnH / 2);
         
         // Draw Multiplayer Button
