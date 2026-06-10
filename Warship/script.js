@@ -202,6 +202,9 @@ const addBossBtn = () => {
     btn.onclick = (e) => {
         e.stopPropagation();
         initAudio();
+        const loginModal = document.getElementById('login-modal');
+        if (loginModal && loginModal.style.display === 'flex') return;
+        
         if (isTutorialOpen) return;
         if (!gameStarted) gameStarted = true;
         spawnDreadnoughtPending = true;
@@ -242,14 +245,19 @@ function showLoginModal() {
         modal = document.createElement('div');
         modal.id = 'login-modal';
         Object.assign(modal.style, {
-            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)', zIndex: '9999999',
+            display: 'flex', justifyContent: 'center', alignItems: 'center'
+        });
+        
+        const content = document.createElement('div');
+        Object.assign(content.style, {
             width: '320px', backgroundColor: 'rgba(0, 40, 0, 0.95)',
             border: '2px solid #00ff00', color: '#00ff00', fontFamily: 'monospace', padding: '20px',
-            zIndex: '9999999', boxShadow: '0 0 20px #000', textAlign: 'center'
+            boxShadow: '0 0 20px #000', textAlign: 'center'
         });
-        document.body.appendChild(modal);
 
-        modal.innerHTML = `
+        content.innerHTML = `
             <h2 style="margin-top:0;">ACCOUNT LOGIN</h2>
             <div style="text-align: left; margin-bottom: 10px;">
                 <label>Username / Email:</label><br>
@@ -263,6 +271,13 @@ function showLoginModal() {
             <button id="login-close-btn" style="padding: 10px; width: 45%; background: rgba(100,0,0,0.8); color: #ff0000; border: 1px solid #ff0000; cursor: pointer; font-family: monospace; font-weight: bold;">CANCEL</button>
             <div id="login-error" style="color: #ff0000; margin-top: 10px; font-size: 12px; height: 14px;"></div>
         `;
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+
+        modal.addEventListener('mousedown', (e) => e.stopPropagation());
+        modal.addEventListener('click', (e) => e.stopPropagation());
+        modal.addEventListener('wheel', (e) => e.stopPropagation());
 
         document.getElementById('login-close-btn').onclick = () => {
             modal.style.display = 'none';
@@ -299,7 +314,7 @@ function showLoginModal() {
     document.getElementById('login-email').value = username === 'Guest' ? '' : username;
     document.getElementById('login-password').value = '';
     document.getElementById('login-error').textContent = '';
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
 }
 
 let score = 0;
@@ -2717,6 +2732,9 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mousedown', (e) => {
     initAudio();
+    const loginModal = document.getElementById('login-modal');
+    if (loginModal && loginModal.style.display === 'flex') return;
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -2756,6 +2774,11 @@ window.addEventListener('mouseup', () => {
 
 canvas.addEventListener('click', (e) => {
     initAudio(); // Initialize audio context on first user interaction
+
+    const loginModal = document.getElementById('login-modal');
+    if (loginModal && loginModal.style.display === 'flex') {
+        return; // Consume click but DO NOT close the modal!
+    }
 
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -2898,14 +2921,14 @@ canvas.addEventListener('click', (e) => {
         const mpBtnX = canvas.width / 2 - mpBtnW / 2;
         const mpBtnY = canvas.height / 2 + 180;
 
-        if (cx >= bossBtnX && cx <= bossBtnX + bossBtnW && cy >= bossBtnY && cy <= bossBtnY + bossBtnH) {
+        if (cxPhysical >= bossBtnX && cxPhysical <= bossBtnX + bossBtnW && cyPhysical >= bossBtnY && cyPhysical <= bossBtnY + bossBtnH) {
             spawnDreadnoughtPending = true;
             dreadnoughtWarningTimer = 180;
             gameStarted = true;
-        } else if (cx >= tutBtnX && cx <= tutBtnX + tutBtnW && cy >= tutBtnY && cy <= tutBtnY + tutBtnH) {
+        } else if (cxPhysical >= tutBtnX && cxPhysical <= tutBtnX + tutBtnW && cyPhysical >= tutBtnY && cyPhysical <= tutBtnY + tutBtnH) {
             isTutorialOpen = true;
             playSonarPing('ship');
-        } else if (cx >= loginBtnX && cx <= loginBtnX + loginBtnW && cy >= loginBtnY && cy <= loginBtnY + loginBtnH) {
+        } else if (cxPhysical >= loginBtnX && cxPhysical <= loginBtnX + loginBtnW && cyPhysical >= loginBtnY && cyPhysical <= loginBtnY + loginBtnH) {
             if (username === 'Guest') {
                 showLoginModal();
             } else {
@@ -2915,7 +2938,7 @@ canvas.addEventListener('click', (e) => {
                 if (typeof scoreElement !== 'undefined') scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
                 if (typeof playSonarPing === 'function') playSonarPing('ship');
             }
-        } else if (cx >= mpBtnX && cx <= mpBtnX + mpBtnW && cy >= mpBtnY && cy <= mpBtnY + mpBtnH) {
+        } else if (cxPhysical >= mpBtnX && cxPhysical <= mpBtnX + mpBtnW && cyPhysical >= mpBtnY && cyPhysical <= mpBtnY + mpBtnH) {
             alert("Multiplayer mode is coming soon!");
             playSonarPing('ship');
         } else {
