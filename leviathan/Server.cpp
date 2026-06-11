@@ -1,9 +1,10 @@
 #include "Server.h"
 #include "GameSession.h"
-#include <iostream>
+#include "Logger.h"
 #include <memory>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
+#include <format>
 
 namespace beast = boost::beast;
 namespace websocket = beast::websocket;
@@ -18,27 +19,27 @@ void Server::acceptConnection() {
     acceptor_.async_accept(
         [this](const boost::system::error_code& error, tcp::socket socket) {
             if (!error) {
-                std::cout << "New client connected. Initiating WebSocket handshake...\n";
+                LOG_INFO << "New client connected. Initiating WebSocket handshake...";
                 
                 auto ws = std::make_shared<websocket::stream<boost::asio::ip::tcp::socket>>(std::move(socket));
                 
                 ws->async_accept(
                     [this, ws](beast::error_code ec) {
                         if (!ec) {
-                            std::cout << "WebSocket handshake successful.\n";
+                            LOG_INFO << "WebSocket handshake successful.";
                             if (waiting_player_) {
                                 // Matchmaking: Found two players, start a game session
-                                std::cout << "Match found! Starting GameSession.\n";
+                                LOG_INFO << "Match found! Starting GameSession.";
                                 auto session = std::make_shared<GameSession>(std::move(waiting_player_), ws);
                                 session->start();
                                 waiting_player_.reset();
                             } else {
                                 // Matchmaking: Wait for opponent
-                                std::cout << "Player waiting for an opponent...\n";
+                                LOG_INFO << "Player waiting for an opponent...";
                                 waiting_player_ = ws;
                             }
                         } else {
-                            std::cerr << "WebSocket handshake failed: " << ec.message() << "\n";
+                            LOG_ERROR << std::format("WebSocket handshake failed: {}", ec.message());
                         }
                     });
             }

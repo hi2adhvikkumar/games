@@ -1,18 +1,20 @@
 #include "Server.h"
-#include <iostream>
+#include "Logger.h"
 #include <boost/asio.hpp>
+#include <format>
 
 int main() {
+    init_logging();
     try {
         boost::asio::io_context io_context;
         
         Server server(io_context, 7777); 
         
-        std::cout << "Leviathan Server started on port 7777\n";
+        LOG_INFO << std::format("Leviathan Server started on port {}", 7777);
         
         io_context.run();
     } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << "\n";
+        LOG_ERROR << std::format("Exception: {}", e.what());
     }
     return 0;
 }

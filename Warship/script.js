@@ -353,12 +353,16 @@ let spawnJuggernautPending = false;
 let dreadnoughtWarningTimer = 0;
 let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
-let masterVolume = 1.0;
+let masterVolume = 0.0;
 let playerMaxHp = 50;
 let playerHp = 50;
 let gameOver = false;
 let enemyProjectiles = [];
 let screenShakeEnabled = false;
+let ws = null;
+let isMultiplayer = false;
+let isWaitingForMatch = false;
+let playerRole = 'UNASSIGNED';
 
 // Load saved data if it exists
 function loadUserData() {
@@ -674,9 +678,11 @@ function updateTurretAngle() {
 function shoot() {
     if (isSubmerged) return; // Can't shoot while underwater!
 
+    let shotFired = false;
     if (weaponType === 'single') {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 12 + projSpeedBonus * 2, horizonY, false));
         playShootSound();
+        shotFired = true;
     } else if (weaponType === 'triple' && tripleAmmo > 0) {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 8 + projSpeedBonus * 2, horizonY, false));
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle - 0.15, 8 + projSpeedBonus * 2, horizonY, false));
@@ -686,6 +692,7 @@ function shoot() {
         if (tripleAmmo <= 0) {
             weaponType = homingAmmo > 0 ? 'homing' : 'single'; // Auto-switch when out of ammo
         }
+        shotFired = true;
     } else if (weaponType === 'homing' && homingAmmo > 0) {
         projectiles.push(new Projectile(turret.x, turret.y, turret.angle, 10 + projSpeedBonus * 2, horizonY, true));
         playShootSound();
@@ -693,6 +700,18 @@ function shoot() {
         if (homingAmmo <= 0) {
             weaponType = 'single';
         }
+        shotFired = true;
+    }
+
+    if (shotFired && isMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'action',
+            action: 'shoot',
+            weapon: weaponType,
+            x: turret.x,
+            y: turret.y,
+            angle: turret.angle
+        }) + "\n");
     }
 }
 
@@ -2939,8 +2958,39 @@ canvas.addEventListener('click', (e) => {
                 if (typeof playSonarPing === 'function') playSonarPing('ship');
             }
         } else if (cxPhysical >= mpBtnX && cxPhysical <= mpBtnX + mpBtnW && cyPhysical >= mpBtnY && cyPhysical <= mpBtnY + mpBtnH) {
-            alert("Multiplayer mode is coming soon!");
+            isWaitingForMatch = true;
+            isMultiplayer = true;
             playSonarPing('ship');
+            
+            ws = new WebSocket('ws://localhost:7777');
+            ws.onopen = () => {
+                console.log("Connected to Leviathan Server via WebSockets.");
+            };
+            ws.onmessage = (e) => {
+                const msgs = e.data.split('\n');
+                for (let msg of msgs) {
+                    if (!msg.trim()) continue;
+                    try {
+                        const data = JSON.parse(msg);
+                        if (data.type === 'role_assignment') {
+                            playerRole = data.role;
+                            isWaitingForMatch = false;
+                            gameStarted = true;
+                        } else if (data.type === 'game_over') {
+                            alert("Game Over: " + data.reason);
+                        } else if (data.type === 'action' && data.action === 'shoot') {
+                            enemyProjectiles.push(new EnemyProjectile(data.x, data.y));
+                        }
+                    } catch (err) {
+                        console.error("Failed to parse server message:", err);
+                    }
+                }
+            };
+            ws.onclose = () => {
+                isWaitingForMatch = false;
+                isMultiplayer = false;
+                console.log("Disconnected from server.");
+            };
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
             for (let i = 0; i < 4; i++) {
@@ -3240,6 +3290,22 @@ function gameLoop() {
     }
 
     if (!gameStarted) {
+        if (isWaitingForMatch) {
+            draw();
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ff00';
+            ctx.font = 'bold 40px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('CONNECTING TO LEVIATHAN...', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.fillText('WAITING FOR OPPONENT...', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.restore();
+            requestAnimationFrame(gameLoop);
+            return;
+        }
+
         draw(); // Draw the initial static frame of the game
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';

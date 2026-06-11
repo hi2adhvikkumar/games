@@ -1,16 +1,18 @@
 #include "GameSession.h"
-#include <iostream>
+#include "Logger.h"
 #include <string>
 #include <memory>
 #include <boost/asio/buffer.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/core/buffers_to_string.hpp>
 #include <boost/beast/websocket.hpp>
+#include <format>
+#include <utility>
 
 namespace beast = boost::beast;
 
 GameSession::GameSession(std::shared_ptr<boost::beast::websocket::stream<boost::asio::ip::tcp::socket>> player1, std::shared_ptr<boost::beast::websocket::stream<boost::asio::ip::tcp::socket>> player2)
-    : player1_socket_(player1), player2_socket_(player2) {
+    : player1_socket_(std::move(player1)), player2_socket_(std::move(player2)) {
 }
 
 void GameSession::start() {
@@ -23,7 +25,11 @@ void GameSession::assignRoles() {
     // Assymetrical Role Assignment
     player1_role_ = PlayerRole::SHIPS;
     player2_role_ = PlayerRole::SUBMARINE;
-    std::cout << "Roles assigned: Player 1 -> SHIPS, Player 2 -> SUBMARINE\n";
+    
+    // C++23: std::to_underlying safely casts strongly-typed enums to integers
+    LOG_INFO << std::format("Roles assigned: Player 1 -> SHIPS (Role ID: {}), Player 2 -> SUBMARINE (Role ID: {})", 
+                             std::to_underlying(player1_role_), 
+                             std::to_underlying(player2_role_));
 
     // Transmit assignment JSON/Protobuf packets to clients to lock in their UI
     auto p1_msg = std::make_shared<std::string>("{\"type\":\"role_assignment\",\"role\":\"SHIPS\"}\n");
@@ -56,11 +62,16 @@ void GameSession::handleRead(int playerIndex, const boost::system::error_code& e
         std::string data = beast::buffers_to_string(buffer->data());
         buffer->consume(buffer->size());
 
+        // C++23: std::string::contains() is vastly superior to str.find() != string::npos
+        if (data.contains("\"action\":\"shoot\"")) {
+            LOG_INFO << std::format("Player {} fired a weapon!", playerIndex);
+        }
+
         // Validate against the specific ruleset of that role here before relaying
         relayData(playerIndex, data);
         startRead(playerIndex);
     } else {
-        std::cerr << "Player " << playerIndex << " disconnected: " << error.message() << "\n";
+        LOG_ERROR << std::format("Player {} disconnected: {}", playerIndex, error.message());
         
         auto victory_msg = std::make_shared<std::string>("{\"type\":\"game_over\",\"reason\":\"opponent_disconnected\",\"winner\":true}\n");
         auto self = shared_from_this();
