@@ -1,7 +1,9 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <optional>
+#include <memory>
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -17,5 +19,5 @@ private:
     
     // Matchmaking queue - stores the socket of the first player waiting for an opponent.
     // Once a second player connects, they are grouped into a GameSession.
-    std::optional<tcp::socket> waiting_player_;
+    std::shared_ptr<boost::beast::websocket::stream<boost::asio::ip::tcp::socket>> waiting_player_;
 };

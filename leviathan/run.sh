@@ -9,4 +9,8 @@ cmake -S . -B build
 echo "Building the project..."
 cmake --build build
 
-echo "Build complete! You can run the server with: ./build/bin/LeviathanServer"
+echo "Stopping any previously running server..."
+pkill -f LeviathanServer || true
+
+echo "Starting the server..."
+./build/bin/LeviathanServer
