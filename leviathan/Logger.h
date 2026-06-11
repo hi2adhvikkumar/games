@@ -6,6 +6,7 @@
 #include <boost/log/expressions.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <iostream>
+#include <string_view>
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
@@ -35,15 +36,11 @@ inline void init_logging() {
     logging::add_common_attributes();
 }
 
-// Constexpr function to strip the directory path and leave only the filename
-// This is evaluated at compile-time, resulting in zero runtime overhead!
-constexpr const char* extract_file_name(const char* path) {
-    const char* file = path;
-    while (*path) {
-        if (*path == '/' || *path == '\\') file = path + 1;
-        path++;
-    }
-    return file;
+// Consteval function to strip the directory path and leave only the filename
+// Evaluated strictly at compile-time, returning a lightweight string_view
+consteval std::string_view extract_file_name(std::string_view path) {
+    auto pos = path.find_last_of("/\\");
+    return pos == std::string_view::npos ? path : path.substr(pos + 1);
 }
 
 #define LOG_DEBUG   BOOST_LOG_TRIVIAL(debug)   << "[" << extract_file_name(__FILE__) << ":" << __LINE__ << "] "

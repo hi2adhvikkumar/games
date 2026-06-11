@@ -22,9 +22,11 @@ void GameSession::start() {
 }
 
 void GameSession::assignRoles() {
+    using enum PlayerRole; // C++20: Brings enum values into scope
+
     // Assymetrical Role Assignment
-    player1_role_ = PlayerRole::SHIPS;
-    player2_role_ = PlayerRole::SUBMARINE;
+    player1_role_ = SHIPS;
+    player2_role_ = SUBMARINE;
     
     // C++23: std::to_underlying safely casts strongly-typed enums to integers
     LOG_INFO << std::format("Roles assigned: Player 1 -> SHIPS (Role ID: {}), Player 2 -> SUBMARINE (Role ID: {})", 
@@ -39,14 +41,21 @@ void GameSession::assignRoles() {
     player1_socket_->text(true);
     player2_socket_->text(true);
 
-    player1_socket_->async_write(boost::asio::buffer(*p1_msg), [self, p1_msg](const boost::system::error_code&, std::size_t){});
-    player2_socket_->async_write(boost::asio::buffer(*p2_msg), [self, p2_msg](const boost::system::error_code&, std::size_t){});
+    auto p1_buf = boost::asio::buffer(*p1_msg);
+    player1_socket_->async_write(p1_buf, [self, p1_msg = std::move(p1_msg)](const boost::system::error_code&, std::size_t){});
+    
+    auto p2_buf = boost::asio::buffer(*p2_msg);
+    player2_socket_->async_write(p2_buf, [self, p2_msg = std::move(p2_msg)](const boost::system::error_code&, std::size_t){});
 }
 
 void GameSession::startRead(int playerIndex) {
     auto self = shared_from_this();
-    auto ws = (playerIndex == 1) ? player1_socket_ : player2_socket_;
-    auto buffer = (playerIndex == 1) ? &player1_buffer_ : &player2_buffer_;
+    
+    auto [ws, buffer] = [&]() {
+        if (playerIndex == 1) return std::pair{player1_socket_, &player1_buffer_};
+        if (playerIndex == 2) return std::pair{player2_socket_, &player2_buffer_};
+        std::unreachable(); // C++23: Tells the compiler to omit branch bounds checking
+    }();
 
     // Reading complete WebSocket message frame
     ws->async_read(*buffer,
@@ -57,7 +66,11 @@ void GameSession::startRead(int playerIndex) {
 
 void GameSession::handleRead(int playerIndex, const boost::system::error_code& error, size_t /*bytes_transferred*/) {
     if (!error) {
-        auto buffer = (playerIndex == 1) ? &player1_buffer_ : &player2_buffer_;
+        auto buffer = [&]() {
+            if (playerIndex == 1) return &player1_buffer_;
+            if (playerIndex == 2) return &player2_buffer_;
+            std::unreachable(); // C++23
+        }();
         
         std::string data = beast::buffers_to_string(buffer->data());
         buffer->consume(buffer->size());
@@ -75,7 +88,11 @@ void GameSession::handleRead(int playerIndex, const boost::system::error_code& e
         
         auto victory_msg = std::make_shared<std::string>("{\"type\":\"game_over\",\"reason\":\"opponent_disconnected\",\"winner\":true}\n");
         auto self = shared_from_this();
-        auto remaining_ws = (playerIndex == 1) ? player2_socket_ : player1_socket_;
+        auto remaining_ws = [&]() {
+            if (playerIndex == 1) return player2_socket_;
+            if (playerIndex == 2) return player1_socket_;
+            std::unreachable(); // C++23
+        }();
         
         if (remaining_ws->is_open()) {
             remaining_ws->async_write(boost::asio::buffer(*victory_msg), [self, victory_msg](const boost::system::error_code&, std::size_t){});
@@ -85,10 +102,15 @@ void GameSession::handleRead(int playerIndex, const boost::system::error_code& e
 
 void GameSession::relayData(int fromPlayerIndex, const std::string& data) {
     auto self = shared_from_this();
-    auto target_ws = (fromPlayerIndex == 1) ? player2_socket_ : player1_socket_;
+    auto target_ws = [&]() {
+        if (fromPlayerIndex == 1) return player2_socket_;
+        if (fromPlayerIndex == 2) return player1_socket_;
+        std::unreachable(); // C++23
+    }();
 
     auto msg = std::make_shared<std::string>(data);
+    auto buf = boost::asio::buffer(*msg);
     // Fire-and-forget relaying mechanism via Beast async write
-    target_ws->async_write(boost::asio::buffer(*msg),
-        [self, msg](const boost::system::error_code& /*error*/, size_t /*bytes_transferred*/) {});
+    target_ws->async_write(buf,
+        [self, msg = std::move(msg)](const boost::system::error_code& /*error*/, size_t /*bytes_transferred*/) {});
 }
