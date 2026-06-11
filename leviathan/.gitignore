@@ -10,4 +10,5 @@ cmake_install.cmake
 # IDEs
 .vscode/
 .vs/
-*.swp
+*.swp.claude/
+*.log
