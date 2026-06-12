@@ -15,6 +15,28 @@ GameSession::GameSession(std::shared_ptr<boost::beast::websocket::stream<boost::
     : player1_socket_(std::move(player1)), player2_socket_(std::move(player2)) {
 }
 
+void GameSession::setOnFinished(std::function<void(std::shared_ptr<GameSession>)> on_finished) {
+    on_finished_ = std::move(on_finished);
+}
+
+void GameSession::broadcast(const std::string& message) {
+    auto msg = std::make_shared<std::string>(message);
+    auto self = shared_from_this();
+    
+    // Safely dispatch asynchronous writes into the respective stream's executor context
+    boost::asio::dispatch(player1_socket_->get_executor(), [this, self, msg]() {
+        if (player1_socket_->is_open()) {
+            player1_socket_->async_write(boost::asio::buffer(*msg), [self, msg = std::move(msg)](const boost::system::error_code&, std::size_t){});
+        }
+    });
+    
+    boost::asio::dispatch(player2_socket_->get_executor(), [this, self, msg]() {
+        if (player2_socket_->is_open()) {
+            player2_socket_->async_write(boost::asio::buffer(*msg), [self, msg = std::move(msg)](const boost::system::error_code&, std::size_t){});
+        }
+    });
+}
+
 void GameSession::start() {
     assignRoles();
     startRead(1);
@@ -96,6 +118,11 @@ void GameSession::handleRead(int playerIndex, const boost::system::error_code& e
         
         if (remaining_ws->is_open()) {
             remaining_ws->async_write(boost::asio::buffer(*victory_msg), [self, victory_msg](const boost::system::error_code&, std::size_t){});
+        }
+        
+        // Atomically guarantee cleanup is only called once per session
+        if (!is_finished_.exchange(true) && on_finished_) {
+            on_finished_(self);
         }
     }
 }

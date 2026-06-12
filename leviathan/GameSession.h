@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include <atomic>
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -22,6 +24,9 @@ public:
 
     void start();
 
+    void setOnFinished(std::function<void(std::shared_ptr<GameSession>)> on_finished);
+    void broadcast(const std::string& message);
+
 private:
     void assignRoles();
     void startRead(int playerIndex);
@@ -38,4 +43,7 @@ private:
 
     boost::beast::flat_buffer player1_buffer_;
     boost::beast::flat_buffer player2_buffer_;
+    
+    std::function<void(std::shared_ptr<GameSession>)> on_finished_;
+    std::atomic<bool> is_finished_{false};
 };
