@@ -1,16 +1,13 @@
-FROM ubuntu:22.04
+# Stage 1: Build the application
+FROM rust:1.76 as builder
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /usr/src/leviathan
+COPY . .
 
-# Install C++ compiler, CMake, Boost.Asio dependencies, and Protobuf
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    g++ \
-    cmake \
-    libboost-system-dev \
-    protobuf-compiler \
-    libprotobuf-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Build for release
+RUN cargo install --path .
 
-WORKDIR /app
+# Stage 2: Create a minimal final image
+FROM debian:bullseye-slim
+COPY --from=builder /usr/local/cargo/bin/leviathan /usr/local/bin/leviathan
+CMD ["leviathan"]
