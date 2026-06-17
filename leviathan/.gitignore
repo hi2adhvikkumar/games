@@ -1,15 +1,1 @@
-# CMake out-of-source build directory
-build/
-
-# Just in case you ever accidentally do an in-source build
-CMakeCache.txt
-CMakeFiles/
-Makefile
-cmake_install.cmake
-
-# IDEs
-.vscode/
-.vs/
-*.swp.claude/
-*.log
-*.claude
+/target/
