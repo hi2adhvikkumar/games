@@ -111,7 +111,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServerState>) {
     if let Some(opponent_tx) = waiting_player_tx.take() {
         // Match found! Send our socket to the waiting player.
         info!("Match found! Notifying waiting player.");
-        if opponent_tx.send(socket).is_err() {
+        if let Err(socket) = opponent_tx.send(socket) {
             // The waiting player disconnected before we could match them.
             // We'll just become the new waiting player.
             info!("Waiting player disconnected before match. Becoming the new waiting player.");
@@ -163,7 +163,7 @@ async fn game_session_task(p1_socket: WebSocket, p2_socket: WebSocket) {
     info!("Roles assigned: Player 1 -> SHIPS, Player 2 -> SUBMARINE");
 
     // The authoritative state for this game session.
-    let mut game_state = GameState {
+    let game_state = GameState {
         players: vec![
             PlayerState { id: 1, role: PlayerRole::SHIPS, angle: 0.0, hp: 100 },
             PlayerState { id: 2, role: PlayerRole::SUBMARINE, angle: 0.0, hp: 50 },
@@ -202,7 +202,12 @@ async fn game_session_task(p1_socket: WebSocket, p2_socket: WebSocket) {
                     let _ = p2_sender.send(Message::Text(serde_json::to_string(&ServerMessage::GameOver{reason: "opponent_disconnected".to_string()}).unwrap() + "\n")).await;
                     break;
                 }
-                // TODO: Process input from player 1 and update game_state.
+                if let Message::Text(text) = msg {
+                    if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
+                        info!("Received from Player 1: {:?}", client_msg);
+                        // TODO: update game_state based on client_msg
+                    }
+                }
             },
             // Message from player 2 (SUBMARINE)
             Some(Ok(msg)) = p2_receiver.next() => {
@@ -211,7 +216,12 @@ async fn game_session_task(p1_socket: WebSocket, p2_socket: WebSocket) {
                     let _ = p1_sender.send(Message::Text(serde_json::to_string(&ServerMessage::GameOver{reason: "opponent_disconnected".to_string()}).unwrap() + "\n")).await;
                     break;
                 }
-                // TODO: Process input from player 2 and update game_state.
+                if let Message::Text(text) = msg {
+                    if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
+                        info!("Received from Player 2: {:?}", client_msg);
+                        // TODO: update game_state based on client_msg
+                    }
+                }
             },
             else => { info!("A player disconnected or an error occurred. Ending session."); break; }
         }
