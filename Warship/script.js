@@ -52,7 +52,7 @@ window.addEventListener('keydown', (e) => {
         justStarted = true;
         // Pre-spawn some ships inside the view so the player doesn't have to wait
         for (let i = 0; i < 4; i++) {
-            let s = new Ship(Math.random() < 0.3 ? 'battleship' : 'normal');
+            let s = new Ship(Math.random() < 0.3 ? 'supply' : 'hunter');
             s.x = canvas.width / 2 + (Math.random() * 400) - 200;
             ships.push(s);
         }
@@ -91,8 +91,8 @@ window.addEventListener('keydown', (e) => {
         if (e.key && e.key.toLowerCase() === 't') {
             const saveData = {
                 score, highScore, credits, projSpeedBonus, ammoBonus, 
-                radarBonus, homingBonus, tripleAmmo, homingAmmo, 
-                weaponType, nextBossScore, nextJuggernautScore, masterVolume,
+                radarBonus, homingBonus, tripleAmmo, homingAmmo, weaponType,
+                masterVolume,
                 playerHp, playerMaxHp, hullBonus, screenShakeEnabled
             };
             localStorage.setItem('warshipSaveData_' + username, JSON.stringify(saveData));
@@ -103,16 +103,6 @@ window.addEventListener('keydown', (e) => {
             }
             saveMessageTimer = 120; // Show saved message for 2 seconds
         }
-    // Cheat code 'X' to instantly spawn the Boss (Dreadnought)
-    if (e.key && e.key.toLowerCase() === 'x') {
-        spawnDreadnoughtPending = true;
-        dreadnoughtWarningTimer = 180;
-    }
-    // Cheat code 'Z' to instantly spawn the Massive Juggernaut
-    if (e.key && e.key.toLowerCase() === 'z') {
-        spawnJuggernautPending = true;
-        juggernautWarningTimer = 240;
-    }
     // Keyboard shortcuts 'Escape' or 'P' to pause/open menu
     if (e.key && (e.key === 'Escape' || e.key.toLowerCase() === 'p')) {
         if (isUpgradesOpen) {
@@ -174,45 +164,6 @@ window.addEventListener('wheel', (e) => {
         if (globalZoomLevel > 2.0) globalZoomLevel = 2.0;
     }
 });
-
-const addBossBtn = () => {
-    if (document.getElementById('boss-btn-html')) return;
-    if (!document.body) {
-        setTimeout(addBossBtn, 50); // Wait until body exists
-        return;
-    }
-    const btn = document.createElement('button');
-    btn.id = 'boss-btn-html';
-    btn.textContent = 'SPAWN BOSS';
-    Object.assign(btn.style, {
-        position: 'absolute',
-        top: '80px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '20px 40px',
-        fontSize: '24px',
-        fontWeight: 'bold',
-        backgroundColor: 'rgba(150, 40, 40, 0.9)',
-        color: '#ffffff',
-        zIndex: '999999',
-        border: '2px solid #ffffff',
-        borderRadius: '8px',
-        cursor: 'pointer'
-    });
-    btn.onclick = (e) => {
-        e.stopPropagation();
-        initAudio();
-        const loginModal = document.getElementById('login-modal');
-        if (loginModal && loginModal.style.display === 'flex') return;
-        
-        if (isTutorialOpen) return;
-        if (!gameStarted) gameStarted = true;
-        spawnDreadnoughtPending = true;
-        dreadnoughtWarningTimer = 180;
-    };
-    document.body.appendChild(btn);
-};
-addBossBtn();
 
 const addFooterLinks = () => {
     if (document.getElementById('footer-links')) return;
@@ -344,14 +295,6 @@ let isTutorialOpen = localStorage.getItem('warshipTutorialDone') !== 'true';
 let nightVisionEnabled = false;
 let blackAndWhiteEnabled = false;
 let shakeIntensity = 0;
-let dreadnoughtActive = false;
-let juggernautActive = false;
-let nextBossScore = 20; // Trigger the boss naturally every 20 points
-let nextJuggernautScore = 100; // Trigger the massive boss every 100 points
-let spawnDreadnoughtPending = false; 
-let spawnJuggernautPending = false; 
-let dreadnoughtWarningTimer = 0;
-let juggernautWarningTimer = 0;
 let saveMessageTimer = 0;
 let masterVolume = 0.0;
 let playerMaxHp = 50;
@@ -380,8 +323,6 @@ function loadUserData() {
             tripleAmmo = savedData.tripleAmmo || 40;
             homingAmmo = savedData.homingAmmo || 0;
             weaponType = savedData.weaponType || 'single';
-            nextBossScore = savedData.nextBossScore || 20;
-            nextJuggernautScore = savedData.nextJuggernautScore || 100;
             if (savedData.screenShakeEnabled !== undefined) screenShakeEnabled = savedData.screenShakeEnabled;
             if (savedData.masterVolume !== undefined) {
                 masterVolume = savedData.masterVolume;
@@ -402,7 +343,6 @@ function loadUserData() {
             score = 0; credits = 0; projSpeedBonus = 0; ammoBonus = 0;
             radarBonus = 0; homingBonus = 0; hullBonus = 0;
             tripleAmmo = 40; homingAmmo = 0; weaponType = 'single';
-            nextBossScore = 20; nextJuggernautScore = 100;
             playerMaxHp = 50; playerHp = 50;
             screenShakeEnabled = false;
         }
@@ -714,16 +654,27 @@ function shoot() {
 }
 
 function spawnShip() {
-    if (dreadnoughtActive || juggernautActive) return; // Stop spawning normal ships during the boss phase
-    
-    if (Math.random() < 0.05) { // Increased spawn rate from 2% to 5% per frame
+    // Logic to spawn the single, unique aircraft carrier.
+    // It will try to spawn after some time has passed, and only if there aren't too many ships.
+    if (!carrierHasSpawned && ships.length < 5 && time > 100) { // Spawn after ~10 seconds
+        ships.push(new Ship('carrier'));
+        carrierHasSpawned = true;
+        return; // Make the carrier's entrance more dramatic.
+    }
+
+    if (Math.random() < 0.05) { // Chance to spawn a ship each frame
         const rand = Math.random();
-        let type = 'normal';
-        if (rand < 0.05) type = 'civilian'; // 5% chance for a hospital ship (much rarer)
-        else if (rand < 0.25) type = 'battleship'; // 20% chance
-        else if (rand < 0.35) type = 'aircraftcarrier'; // 10% chance
-        else if (rand < 0.55) type = 'ptboat'; // 20% chance
-        else if (rand < 0.70) type = 'submarine'; // 15% chance
+        let type;
+        if (rand < 0.10) { // 10% chance for a medical ship
+            type = 'medical';
+        } else if (rand < 0.40) { // 30% chance for a supply ship (0.40 - 0.10)
+            type = 'supply';
+        } else if (rand < 0.55) { // 15% chance for an enemy submarine (0.55 - 0.40)
+            type = 'submarine';
+        } else { // 45% chance for a hunter (destroyer/frigate)
+            type = 'hunter';
+        }
+        
         ships.push(new Ship(type));
     }
 }
@@ -738,19 +689,6 @@ function spawnCrate() {
 function spawnMine() {
     if (mines.length < 1 && Math.random() < 0.005) { 
         mines.push(new Mine());
-    }
-}
-
-function checkBossTriggers() {
-    if (score >= nextJuggernautScore) {
-        nextJuggernautScore += 100;
-        if (nextBossScore <= score) nextBossScore = score + 20; // Skip Dreadnought to not overlap
-        spawnJuggernautPending = true;
-        juggernautWarningTimer = 240;
-    } else if (score >= nextBossScore) {
-        nextBossScore += 20;
-        spawnDreadnoughtPending = true;
-        dreadnoughtWarningTimer = 180;
     }
 }
 
@@ -820,32 +758,20 @@ function checkCollisions() {
                 if (ship.hp <= 0) {
                     ships.splice(j, 1);
                     
-                    if (ship.type === 'civilian') {
+                    if (ship.type === 'medical') {
                         credits = Math.max(0, credits - 20); // Penalty for hitting a hospital ship!
                     } else {
                         score += 1; // Reward for normal ships
-                        if (ship.type === 'juggernaut') {
-                            for (let step = -350; step <= 350; step += 80) {
-                                explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
-                            }
-                            playMassiveExplosionSound();
-                            crackGlass(ship.x, ship.y);
-                            shakeIntensity = 40; // Enormous screen shake!
-                            juggernautActive = false;
-                            credits += 500; // Massive boss defeated!
-                        } else if (ship.type === 'dreadnought') {
-                            dreadnoughtActive = false;
-                            credits += 150; // Boss defeated!
-                        } else if (ship.type === 'aircraftcarrier') {
+                        if (ship.type === 'carrier') {
                             credits += 50; // High reward for carrier!
                         } else if (ship.type === 'submarine') {
                             credits += 40; // High reward for sub!
+                        } else if (ship.type === 'supply') {
+                            credits += 25;
                         } else {
-                            credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                            credits += 10;
                         }
                     }
-                    
-                    checkBossTriggers();
                     
                     if (score > highScore) {
                         highScore = score;
@@ -913,32 +839,20 @@ function checkCollisions() {
                         if (ship.hp <= 0) {
                             ships.splice(s, 1);
                             
-                            if (ship.type === 'civilian') {
+                            if (ship.type === 'medical') {
                                 credits = Math.max(0, credits - 20); 
                             } else {
                                 score += 1;
-                                if (ship.type === 'juggernaut') {
-                                    for (let step = -350; step <= 350; step += 80) {
-                                        explosions.push(new Explosion(ship.x + step, ship.y + (Math.random() * 40 - 20), true));
-                                    }
-                                    playMassiveExplosionSound();
-                                    crackGlass(ship.x, ship.y);
-                                    shakeIntensity = 40;
-                                    juggernautActive = false;
-                                    credits += 500;
-                                } else if (ship.type === 'dreadnought') {
-                                    dreadnoughtActive = false;
-                                    credits += 150;
-                                } else if (ship.type === 'aircraftcarrier') {
+                                if (ship.type === 'carrier') {
                                     credits += 50;
                                 } else if (ship.type === 'submarine') {
                                     credits += 40;
+                                } else if (ship.type === 'supply') {
+                                    credits += 25;
                                 } else {
-                                    credits += (ship.type === 'battleship' ? 30 : (ship.type === 'ptboat' ? 20 : 10));
+                                    credits += 10;
                                 }
                             }
-                            
-                            checkBossTriggers();
                         }
                     }
                 }
@@ -1025,12 +939,6 @@ function update() {
         if (shakeIntensity < 0) shakeIntensity = 0;
     }
 
-    if (dreadnoughtWarningTimer > 0) {
-        dreadnoughtWarningTimer--;
-    }
-    if (juggernautWarningTimer > 0) {
-        juggernautWarningTimer--;
-    }
     if (saveMessageTimer > 0) {
         saveMessageTimer--;
     }
@@ -1141,22 +1049,12 @@ function update() {
     raindrops.forEach(drop => drop.update());
     raindrops = raindrops.filter(drop => !drop.isOffScreen());
 
-    spawnShip();
-    spawnCrate();
-    spawnMine();
-    checkCollisions();
-
-    if (spawnJuggernautPending) {
-        ships = []; // Stop all existing ships to make way for the Juggernaut
-        ships.push(new Ship('juggernaut'));
-        juggernautActive = true;
-        spawnJuggernautPending = false;
-    } else if (spawnDreadnoughtPending) {
-        ships = []; // Stop all existing ships to make way for the Dreadnought
-        ships.push(new Ship('dreadnought'));
-        dreadnoughtActive = true;
-        spawnDreadnoughtPending = false;
+    if (!isMultiplayer) {
+        spawnShip();
+        spawnCrate();
+        spawnMine();
     }
+    checkCollisions();
 
     radarCountElement.textContent = `Ships on Radar: ${ships.length}`;
 }
@@ -1798,6 +1696,131 @@ function draw() {
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.stroke();
     } else {
+        ctx.save();
+        // Frigate/Destroyer Perspective Deck View
+        const bowTipY = horizonY + 180;
+        const deckBottomWidth = canvas.width * 0.9;
+        
+        // Deck surface
+        ctx.fillStyle = '#4a5056';
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - deckBottomWidth / 2, canvas.height);
+        ctx.lineTo(canvas.width / 2, bowTipY);
+        ctx.lineTo(canvas.width / 2 + deckBottomWidth / 2, canvas.height);
+        ctx.fill();
+        
+        // Deck edges
+        ctx.strokeStyle = '#2a3035';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - deckBottomWidth / 2, canvas.height);
+        ctx.lineTo(canvas.width / 2, bowTipY);
+        ctx.lineTo(canvas.width / 2 + deckBottomWidth / 2, canvas.height);
+        ctx.stroke();
+
+        // Draw railings along the edges for perspective
+        ctx.strokeStyle = '#5a6066';
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= 10; i++) {
+            const t = i / 10;
+            // Left edge
+            const lx = (canvas.width / 2 - deckBottomWidth / 2) * (1 - t) + (canvas.width / 2) * t;
+            const ly = canvas.height * (1 - t) + bowTipY * t;
+            // Perspective height of railing post
+            const postHeight = 30 + (1 - t) * 40;
+            ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly - postHeight); ctx.stroke();
+            
+            // Right edge
+            const rx = (canvas.width / 2 + deckBottomWidth / 2) * (1 - t) + (canvas.width / 2) * t;
+            ctx.beginPath(); ctx.moveTo(rx, ly); ctx.lineTo(rx, ly - postHeight); ctx.stroke();
+        }
+        
+        // Handrails
+        ctx.beginPath();
+        for (let i = 0; i <= 10; i++) {
+            const t = i / 10;
+            const lx = (canvas.width / 2 - deckBottomWidth / 2) * (1 - t) + (canvas.width / 2) * t;
+            const postHeight = 30 + (1 - t) * 40;
+            const ly = canvas.height * (1 - t) + bowTipY * t - postHeight;
+            if (i === 0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+        ctx.beginPath();
+        for (let i = 0; i <= 10; i++) {
+            const t = i / 10;
+            const rx = (canvas.width / 2 + deckBottomWidth / 2) * (1 - t) + (canvas.width / 2) * t;
+            const postHeight = 30 + (1 - t) * 40;
+            const ly = canvas.height * (1 - t) + bowTipY * t - postHeight;
+            if (i === 0) ctx.moveTo(rx, ly); else ctx.lineTo(rx, ly);
+        }
+        ctx.stroke();
+
+        // Draw the Main Forward Gun Turret in perspective
+        ctx.translate(turret.x, turret.y);
+
+        // Normalize turret angle (it normally points up -> -90 deg -> -Math.PI/2)
+        // We want 0 to be forward.
+        const aimAngle = turret.angle + Math.PI / 2;
+        
+        // Base ring (ellipse for perspective)
+        ctx.fillStyle = '#2a3036';
+        ctx.beginPath(); 
+        ctx.ellipse(0, 20, 90, 40, 0, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.strokeStyle = '#111'; 
+        ctx.lineWidth = 3; 
+        ctx.stroke();
+
+        // Draw rotating housing and barrels
+        ctx.save();
+        ctx.rotate(aimAngle);
+
+        // Barrels
+        ctx.fillStyle = '#1a2025';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 2;
+        
+        if (weaponType === 'single') {
+            ctx.fillRect(-10, -160, 20, 160); 
+            ctx.strokeRect(-10, -160, 20, 160);
+        } else if (weaponType === 'triple') {
+            ctx.fillRect(-25, -140, 14, 140); ctx.strokeRect(-25, -140, 14, 140);
+            ctx.fillRect(-7, -160, 14, 160);  ctx.strokeRect(-7, -160, 14, 160);
+            ctx.fillRect(11, -140, 14, 140);  ctx.strokeRect(11, -140, 14, 140);
+        } else if (weaponType === 'homing') {
+            ctx.fillStyle = '#aa4400';
+            ctx.fillRect(-18, -130, 12, 130); ctx.strokeRect(-18, -130, 12, 130);
+            ctx.fillRect(6, -130, 12, 130);   ctx.strokeRect(6, -130, 12, 130);
+            ctx.fillStyle = '#1a2025';
+            ctx.fillRect(-18, -100, 12, 100);
+            ctx.fillRect(6, -100, 12, 100);
+        }
+
+        // Turret Housing
+        ctx.fillStyle = '#6a7076';
+        ctx.beginPath();
+        ctx.moveTo(-50, -40);
+        ctx.lineTo(50, -40);
+        ctx.lineTo(65, 30);
+        ctx.lineTo(-65, 30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Turret roof details
+        ctx.fillStyle = '#4a5056';
+        ctx.beginPath();
+        ctx.moveTo(-40, -30);
+        ctx.lineTo(40, -30);
+        ctx.lineTo(50, 15);
+        ctx.lineTo(-50, 15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+        ctx.restore();
+
         // Simple Ship Surface View HUD Crosshair
         ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
         ctx.lineWidth = 1.5;
@@ -2001,12 +2024,10 @@ function draw() {
     };
 
     let visibleShipsCount = 0;
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'normal' || s.type === 'civilian'), '#ff4444', 'ship'); // Red blips for normal and civilian ships
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'ptboat'), '#ff69b4', 'ship'); // Pink blips for PT boats
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'aircraftcarrier'), '#ffcc00', 'ship'); // Gold/Yellow-Orange blips for carriers
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'battleship'), '#ff6600', 'ship'); // Vibrant orange blips for battleships
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'dreadnought'), '#aa00ff', 'ship'); // Neon purple blips for dreadnoughts
-    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'juggernaut'), '#ffffff', 'ship'); // Bright white blips for juggernauts
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'hunter'), '#ff0000', 'ship'); // Red blips for hunters
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'carrier'), '#ffcc00', 'ship'); // Gold blips for carriers
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'supply'), '#00ffff', 'ship'); // Cyan blips for supply ships
+    visibleShipsCount += drawBlips(ships.filter(s => s.type === 'medical'), '#ffffff', 'ship'); // White blips for medical ships
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
@@ -2223,29 +2244,6 @@ function draw() {
         ctx.restore();
     }
 
-    // Draw Dreadnought Warning over absolutely everything
-    if (juggernautWarningTimer > 0) {
-        ctx.save();
-        ctx.fillStyle = `rgba(255, 0, 255, ${0.5 + Math.abs(Math.sin(time * 5)) * 0.5})`; // Magenta warning
-        ctx.font = 'bold 26px monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 10;
-        ctx.fillText('>> CRITICAL WARNING: JUGGERNAUT DETECTED <<', viewLeft + 20, viewTop + 20);
-        ctx.restore();
-    } else if (dreadnoughtWarningTimer > 0) {
-        ctx.save();
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + Math.abs(Math.sin(time * 5)) * 0.5})`;
-        ctx.font = 'bold 24px monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 10;
-        ctx.fillText('>> WARNING: DREADNOUGHT DETECTED <<', viewLeft + 20, viewTop + 20);
-        ctx.restore();
-    }
-
     // Draw menu overlay if open
     if (isMenuOpen) {
         ctx.save();
@@ -2378,14 +2376,11 @@ function draw() {
         let startY = canvas.height / 2 - 150;
 
         const shipInfo = [
-            "Normal: Standard ship, 1 HP. Speed varies.",
-            "Battleship: Slower, larger, takes 3 hits.",
-            "PT Boat: Very fast, small, takes 1 hit.",
-            "Submarine: Can dive to dodge shots, 1 HP.",
-            "Aircraft Carrier: Large enemy ship, 5 HP.",
-            "Civilian: Hospital ship, DO NOT SHOOT! (-20 pts).",
-            "Dreadnought: Mini-boss, 9 HP.",
-            "Juggernaut: Massive Super Boss, 15 HP."
+            "Hunter: Fast sub hunter, takes 2 hits.",
+            "Supply: Logistics & cargo ship, takes 3 hits.",
+            "Carrier: Heavy aircraft carrier, takes 5 hits.",
+            "Medical: Hospital ship, DO NOT SHOOT! (-20 pts).",
+            "Submarine: Can dive to dodge shots, 1 HP."
         ];
 
         shipInfo.forEach(info => {
@@ -2735,8 +2730,8 @@ canvas.addEventListener('click', (e) => {
             gameOver = false;
             ships = []; enemyProjectiles = []; projectiles = []; explosions = [];
             crates = []; mines = [];
+            carrierHasSpawned = false;
             score = 0; credits = 0;
-            dreadnoughtActive = false; juggernautActive = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             if (typeof playSonarPing === 'function') playSonarPing('ship');
         }
@@ -2837,11 +2832,6 @@ canvas.addEventListener('click', (e) => {
     }
 
     if (!gameStarted) {
-        const bossBtnW = 320;
-        const bossBtnH = 60;
-        const bossBtnX = canvas.width / 2 - bossBtnW / 2;
-        const bossBtnY = canvas.height / 2 + 10;
-        
         const tutBtnW = 320;
         const tutBtnH = 40;
         const tutBtnX = canvas.width / 2 - tutBtnW / 2;
@@ -2857,11 +2847,7 @@ canvas.addEventListener('click', (e) => {
         const mpBtnX = canvas.width / 2 - mpBtnW / 2;
         const mpBtnY = canvas.height / 2 + 180;
 
-        if (cxPhysical >= bossBtnX && cxPhysical <= bossBtnX + bossBtnW && cyPhysical >= bossBtnY && cyPhysical <= bossBtnY + bossBtnH) {
-            spawnDreadnoughtPending = true;
-            dreadnoughtWarningTimer = 180;
-            gameStarted = true;
-        } else if (cxPhysical >= tutBtnX && cxPhysical <= tutBtnX + tutBtnW && cyPhysical >= tutBtnY && cyPhysical <= tutBtnY + tutBtnH) {
+        if (cxPhysical >= tutBtnX && cxPhysical <= tutBtnX + tutBtnW && cyPhysical >= tutBtnY && cyPhysical <= tutBtnY + tutBtnH) {
             isTutorialOpen = true;
             playSonarPing('ship');
         } else if (cxPhysical >= loginBtnX && cxPhysical <= loginBtnX + loginBtnW && cyPhysical >= loginBtnY && cyPhysical <= loginBtnY + loginBtnH) {
@@ -2911,7 +2897,7 @@ canvas.addEventListener('click', (e) => {
         } else {
             // Pre-spawn some ships inside the view so the player doesn't have to wait
             for (let i = 0; i < 4; i++) {
-                let s = new Ship(Math.random() < 0.3 ? 'battleship' : 'normal');
+                let s = new Ship(Math.random() < 0.3 ? 'supply' : 'hunter');
                 s.x = canvas.width / 2 + (Math.random() * 400) - 200;
                 ships.push(s);
             }
@@ -3082,6 +3068,7 @@ canvas.addEventListener('click', (e) => {
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
             loadUserData();
             ships = []; crates = []; mines = []; projectiles = []; enemyProjectiles = [];
+            carrierHasSpawned = false;
             gameOver = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             isMenuOpen = false;
@@ -3114,11 +3101,6 @@ canvas.addEventListener('click', (e) => {
 });
 
 function gameLoop() {
-    const bossBtnHtml = document.getElementById('boss-btn-html');
-    if (bossBtnHtml) {
-        bossBtnHtml.style.display = (isTutorialOpen || !gameStarted || isMenuOpen || isUpgradesOpen || isShipTypesOpen || gameOver) ? 'none' : 'block';
-    }
-
     if (gameOver) {
         draw(); // Draw the background/game state
         ctx.save();
@@ -3232,22 +3214,6 @@ function gameLoop() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('WARSHIP', canvas.width / 2, canvas.height / 2 - 60);
-        
-        // Draw Spawn Boss Button on the Start Screen
-        const bossBtnW = 320;
-        const bossBtnH = 60;
-        const bossBtnX = canvas.width / 2 - bossBtnW / 2;
-        const bossBtnY = canvas.height / 2 + 10;
-        
-        ctx.fillStyle = blackAndWhiteEnabled ? 'rgba(0, 0, 0, 0.9)' : 'rgba(200, 0, 0, 0.9)';
-        ctx.fillRect(bossBtnX, bossBtnY, bossBtnW, bossBtnH);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(bossBtnX, bossBtnY, bossBtnW, bossBtnH);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px monospace';
-        ctx.fillText('START & SPAWN BOSS', canvas.width / 2, bossBtnY + bossBtnH / 2);
         
         // Draw How to Play Button
         const tutBtnW = 320;
