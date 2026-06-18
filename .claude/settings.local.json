@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "Bash(git -C /mnt/f/code/games status)",
+      "Bash(git -C /mnt/f/code/games diff HEAD)",
+      "Bash(git -C /mnt/f/code/games log --oneline -5)",
+      "Bash(git -C /mnt/f/code/games add Dockerfile leviathan/.gitignore leviathan/CMakeLists.txt leviathan/GameSession.cpp leviathan/GameSession.h leviathan/Logger.h leviathan/Server.cpp leviathan/Server.h leviathan/main.cpp leviathan/run.sh main.rs leviathan/src/main.rs)",
+      "Bash(git -C /mnt/f/code/games commit -m ' *)",
+      "Bash(git -C /mnt/f/code/games push origin main)"
     ]
   }
 }

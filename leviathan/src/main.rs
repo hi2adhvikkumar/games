@@ -103,7 +103,7 @@ async fn ws_handler(
 
 // The main logic for handling a new WebSocket connection and performing matchmaking
 #[instrument(skip_all)]
-async fn handle_socket(socket: WebSocket, state: Arc<ServerState>) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<ServerState>) {
     info!("New client connected, attempting to match...");
 
     let mut waiting_player_tx = state.waiting_player.lock().await;
@@ -111,38 +111,36 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServerState>) {
     if let Some(opponent_tx) = waiting_player_tx.take() {
         // Match found! Send our socket to the waiting player.
         info!("Match found! Notifying waiting player.");
-        if let Err(socket) = opponent_tx.send(socket) {
-            // The waiting player disconnected before we could match them.
-            // We'll just become the new waiting player.
-            info!("Waiting player disconnected before match. Becoming the new waiting player.");
-            let (new_tx, new_rx) = oneshot::channel();
-            *waiting_player_tx = Some(new_tx);
-            // We need to drop the lock before awaiting
-            drop(waiting_player_tx);
-            if let Ok(opponent_socket) = new_rx.await {
-                tokio::spawn(game_session_task(socket, opponent_socket));
+        match opponent_tx.send(socket) {
+            Ok(_) => return, // Successfully handed off our socket
+            Err(returned_socket) => {
+                // The waiting player disconnected before we could match them.
+                info!("Waiting player disconnected before match. Becoming the new waiting player.");
+                socket = returned_socket;
             }
         }
-    } else {
-        // No opponent waiting. We become the waiting player.
-        info!("Player waiting for an opponent...");
-        let (new_tx, new_rx) = oneshot::channel();
-        *waiting_player_tx = Some(new_tx);
+    }
 
-        // Drop the lock so other players can connect
-        drop(waiting_player_tx);
+    // No opponent waiting. We become the waiting player.
+    info!("Player waiting for an opponent...");
+    let (new_tx, new_rx) = oneshot::channel();
+    *waiting_player_tx = Some(new_tx);
 
-        // Wait for an opponent to connect and send us their socket
-        match new_rx.await {
-            Ok(opponent_socket) => {
+    // Drop the lock so other players can connect
+    drop(waiting_player_tx);
+
+    // Wait for an opponent to connect, while also polling our socket to keep it alive
+    tokio::select! {
+        res = new_rx => {
+            if let Ok(opponent_socket) = res {
                 // We are player 1, the opponent is player 2.
                 info!("Opponent found! Starting game session.");
                 tokio::spawn(game_session_task(socket, opponent_socket));
             }
-            Err(_) => {
-                // This can happen if the server is shutting down or the waiting player disconnects.
-                info!("Waiting player channel closed. The player likely disconnected.");
-            }
+        }
+        _ = socket.next() => {
+            // This handles the case where the client disconnects while waiting.
+            info!("Waiting player disconnected or sent early data. Aborting wait.");
         }
     }
 }

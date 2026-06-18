@@ -136,10 +136,10 @@ window.addEventListener('resize', () => {
     canvas.width = window.innerWidth || 1200;
     canvas.height = window.innerHeight || 800;
     horizonY = canvas.height / 2;
-    viewLeft = canvas.width / 2 - 300;
-    viewRight = canvas.width / 2 + 300;
-    viewTop = canvas.height / 2 - 300;
-    viewBottom = canvas.height / 2 + 300;
+    viewLeft = 0;
+    viewRight = canvas.width;
+    viewTop = 0;
+    viewBottom = canvas.height;
     turret.x = canvas.width / 2;
     turret.y = canvas.height / 2 + 300;
     globalZoomLevel = Math.min(1.0, canvas.width / 1200, canvas.height / 800);
@@ -645,9 +645,9 @@ const interactiveGauges = {
 };
 let draggedGauge = null;
 
-for (let i = 0; i < 6; i++) {
+for (let i = 0; i < 15; i++) {
     clouds.push({
-        x: canvas.width / 2 - 400 + Math.random() * 800,
+        x: canvas.width / 2 - 2000 + Math.random() * 4000,
         y: canvas.height / 2 - 300 + Math.random() * 200,
         speed: Math.random() * 0.2 + 0.05,
         scale: Math.random() * 0.6 + 0.3
@@ -656,10 +656,10 @@ for (let i = 0; i < 6; i++) {
 
 let horizonY = canvas.height / 2; // Horizon in the middle of view
 
-let viewLeft = canvas.width / 2 - 300;
-let viewRight = canvas.width / 2 + 300;
-let viewTop = canvas.height / 2 - 300;
-let viewBottom = canvas.height / 2 + 300;
+let viewLeft = 0;
+let viewRight = canvas.width;
+let viewTop = 0;
+let viewBottom = canvas.height;
 
 function updateTurretAngle() {
     const cx = canvas.width / 2;
@@ -1199,7 +1199,7 @@ function update() {
 
     clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
-        if (cloud.x < canvas.width / 2 - 400) cloud.x = canvas.width / 2 + 400;
+        if (cloud.x < canvas.width / 2 - 2000) cloud.x = canvas.width / 2 + 2000;
     });
 
     // Weather logic
@@ -1308,10 +1308,12 @@ function draw() {
     }
 
     // Clip to the periscope view (circular)
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
-    ctx.clip();
+    if (playerRole !== 'SHIPS') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+        ctx.clip();
+    }
 
     // Apply Zoom to the World View
     ctx.save();
@@ -1320,11 +1322,11 @@ function draw() {
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
     // Draw sky with gradient
-    const skyGradient = ctx.createLinearGradient(0, canvas.height / 2 - 400, 0, horizonY);
+    const skyGradient = ctx.createLinearGradient(0, canvas.height / 2 - 2000, 0, horizonY);
     skyGradient.addColorStop(0, lerpColor('#2b5a8c', '#1a1a24', stormIntensity));
     skyGradient.addColorStop(1, lerpColor('#87ceeb', '#4a5a6a', stormIntensity));
     ctx.fillStyle = skyGradient;
-    ctx.fillRect(canvas.width / 2 - 400, canvas.height / 2 - 400, 800, 400);
+    ctx.fillRect(canvas.width / 2 - 2000, canvas.height / 2 - 2000, 4000, 2000);
 
     // Draw drifting clouds
     const cloudTint = Math.floor(255 - 100 * stormIntensity);
@@ -1353,17 +1355,17 @@ function draw() {
     ctx.lineWidth = 1;
     const horizonOffset = Math.sin(time * 0.8) * 2.4;
     ctx.beginPath();
-    ctx.moveTo(canvas.width / 2 - 400, horizonY + horizonOffset);
-    for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 10) {
+    ctx.moveTo(canvas.width / 2 - 2000, horizonY + horizonOffset);
+    for (let x = canvas.width / 2 - 2000; x <= canvas.width / 2 + 2000; x += 40) {
         const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         ctx.lineTo(x, y);
     }
-    ctx.lineTo(canvas.width / 2 + 400, canvas.height / 2 + 400);
-    ctx.lineTo(canvas.width / 2 - 400, canvas.height / 2 + 400);
+    ctx.lineTo(canvas.width / 2 + 2000, canvas.height / 2 + 2000);
+    ctx.lineTo(canvas.width / 2 - 2000, canvas.height / 2 + 2000);
     ctx.closePath();
     
     // Add depth gradient to the water
-    const waterGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height / 2 + 400);
+    const waterGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height / 2 + 2000);
     waterGradient.addColorStop(0, lerpColor('#1c4d7c', '#0e263e', stormIntensity)); 
     waterGradient.addColorStop(1, lerpColor('#001122', '#000408', stormIntensity)); 
     ctx.fillStyle = waterGradient;
@@ -1397,11 +1399,12 @@ function draw() {
 
     // Draw animated waves (whitecaps) on the water (with perspective)
     ctx.save();
-    for (let i = 1; i <= 9; i++) {
+    const maxWaves = playerRole === 'SHIPS' ? 25 : 9;
+    for (let i = 1; i <= maxWaves; i++) {
         const depthFactor = i * 15 + (i * i) * 3.5;
         const waveBaseY = horizonY + depthFactor;
         
-        if (waveBaseY > canvas.height / 2 + 300) break; // Don't draw past periscope view
+        if (playerRole !== 'SHIPS' && waveBaseY > canvas.height / 2 + 300) break; // Don't draw past periscope view
 
         ctx.beginPath();
         ctx.lineWidth = 1 + i * 0.4;
@@ -1411,10 +1414,10 @@ function draw() {
         ctx.setLineDash([80 + i * 15, 60 + i * 10]);
         ctx.lineDashOffset = -(time * (10 + i * 2) + i * 25); // Move them left over time
         
-        for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 20) {
+        for (let x = canvas.width / 2 - 2000; x <= canvas.width / 2 + 2000; x += 40) {
             const waveAmplitude = (2 + i * 0.5);
             const waveY = waveBaseY + Math.sin((x * 0.04) + time * 1.5 + i) * waveAmplitude + Math.cos((x * 0.02) + time * 0.8) * (waveAmplitude * 0.6);
-            if (x === canvas.width / 2 - 400) {
+            if (x === canvas.width / 2 - 2000) {
                 ctx.moveTo(x, waveY);
             } else {
                 ctx.lineTo(x, waveY);
@@ -1426,8 +1429,8 @@ function draw() {
 
     // Draw the horizon outline over the filled water
     ctx.beginPath();
-    ctx.moveTo(canvas.width / 2 - 400, horizonY + horizonOffset);
-    for (let x = canvas.width / 2 - 400; x <= canvas.width / 2 + 400; x += 10) {
+    ctx.moveTo(canvas.width / 2 - 2000, horizonY + horizonOffset);
+    for (let x = canvas.width / 2 - 2000; x <= canvas.width / 2 + 2000; x += 40) {
         const y = horizonY + Math.sin((x * 0.03) + time * 0.8) * 3.2 + Math.cos((x * 0.015) + time * 0.9) * 1.2 + horizonOffset * 0.5;
         ctx.lineTo(x, y);
     }
@@ -1508,7 +1511,9 @@ function draw() {
 
     ctx.restore(); // Restore from World Zoom
 
-    ctx.restore();
+    if (playerRole !== 'SHIPS') {
+        ctx.restore(); // Restore Periscope Clip
+    }
 
     // Apply Zoom to projectiles
     ctx.save();
@@ -1524,6 +1529,7 @@ function draw() {
 
     // Draw periscope mask (Submarine Cockpit) and HUD overlay
     ctx.save();
+    if (playerRole !== 'SHIPS') {
     
     // Clip to everything outside the periscope circle to draw the cockpit
     ctx.save();
@@ -1904,6 +1910,26 @@ function draw() {
     ctx.beginPath();
     ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
     ctx.stroke();
+    } else {
+        // Simple Ship Surface View HUD Crosshair
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - 20, canvas.height / 2);
+        ctx.lineTo(canvas.width / 2 + 20, canvas.height / 2);
+        ctx.moveTo(canvas.width / 2, canvas.height / 2 - 20);
+        ctx.lineTo(canvas.width / 2, canvas.height / 2 + 20);
+        ctx.stroke();
+        
+        // Basic horizon reticle
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 - 150, canvas.height / 2);
+        ctx.lineTo(canvas.width / 2 - 50, canvas.height / 2);
+        ctx.moveTo(canvas.width / 2 + 50, canvas.height / 2);
+        ctx.lineTo(canvas.width / 2 + 150, canvas.height / 2);
+        ctx.stroke();
+    }
 
     // Draw Progress Saved Message
     if (saveMessageTimer > 0) {
@@ -1920,9 +1946,11 @@ function draw() {
 
     // --- Draw Cracked Glass Overlay ---
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
-    ctx.clip(); // Keep the glass cracks strictly inside the periscope lens
+    if (playerRole !== 'SHIPS') {
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, 300, 0, Math.PI * 2);
+        ctx.clip(); // Keep the glass cracks strictly inside the periscope lens
+    }
 
     glassCracks.forEach(crack => {
         ctx.save();
@@ -1961,7 +1989,7 @@ function draw() {
     ctx.restore();
 
     // --- Animated Wiper ---
-    if (wiperProgress > 0) {
+    if (wiperProgress > 0 && playerRole !== 'SHIPS') {
         ctx.save();
         
         // Clip wiper to only be visible inside the glass!
@@ -2754,6 +2782,8 @@ canvas.addEventListener('mousedown', (e) => {
     const loginModal = document.getElementById('login-modal');
     if (loginModal && loginModal.style.display === 'flex') return;
 
+    if (playerRole === 'SHIPS') return; // Prevent grabbing gauges as ship
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -2855,6 +2885,7 @@ canvas.addEventListener('click', (e) => {
         return;
     }
 
+    if (playerRole !== 'SHIPS') {
     // Check if clicked on a gauge (tap the glass effect)
     const gaugeCenters = {
         pressure: { x: cxCenter - 535, y: cyCenter - 220 },
@@ -2917,6 +2948,7 @@ canvas.addEventListener('click', (e) => {
         stickyNoteState = (stickyNoteState + 1) % stickyMessages.length;
         playSonarPing('ship'); // Light tap sound
         return;
+    }
     }
 
     if (!gameStarted) {
