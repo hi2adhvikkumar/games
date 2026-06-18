@@ -611,8 +611,6 @@ let explosions = [];
 let crates = [];
 let mines = [];
 let clouds = [];
-let planes = [];
-let bombs = [];
 let flares = [];
 let splashes = [];
 let glassCracks = [];
@@ -743,12 +741,6 @@ function spawnMine() {
     }
 }
 
-function spawnPlane() {
-    if (planes.length < 2 && Math.random() < 0.005) { // Occasional air support
-        planes.push(new Plane());
-    }
-}
-
 function checkBossTriggers() {
     if (score >= nextJuggernautScore) {
         nextJuggernautScore += 100;
@@ -810,6 +802,10 @@ function checkCollisions() {
         // Check collision with ships
         for (let j = ships.length - 1; j >= 0; j--) {
             const ship = ships[j];
+            
+            if (playerRole === 'SHIPS' && ship.type !== 'submarine') continue; // Ships don't shoot their own fleet
+            if (playerRole !== 'SHIPS' && ship.type === 'submarine') continue; // Subs don't shoot their own sub
+
             const dx = proj.x - ship.x;
             const dy = proj.y - ship.y;
             if (Math.abs(dx) < proj.radius + ship.width / 2 && Math.abs(dy) < proj.radius + ship.height / 2) {
@@ -862,57 +858,7 @@ function checkCollisions() {
             }
         }
         
-        if (hit) continue; // If the projectile already hit a ship, skip checking planes
-
-        // Check collision with planes
-        for (let p = planes.length - 1; p >= 0; p--) {
-            const plane = planes[p];
-            const dx = proj.x - plane.x;
-            const dy = proj.y - plane.y;
-            if (Math.abs(dx) < proj.radius + plane.width / 2 && Math.abs(dy) < proj.radius + plane.height / 2) {
-                explosions.push(new Explosion(plane.x, plane.y));
-                playExplosionSound();
-                projectiles.splice(i, 1);
-                
-                plane.hp -= 1;
-                if (plane.hp <= 0) {
-                    planes.splice(p, 1);
-                    score += 2; // Planes give double points!
-                    credits += 25;
-                    
-                    checkBossTriggers();
-                    if (score > highScore) {
-                        highScore = score;
-                        localStorage.setItem('warshipHighScore_' + username, highScore);
-                    }
-                    scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-                }
-                hit = true;
-                break;
-            }
-        }
-        
         if (hit) continue; // If the projectile already hit a ship, skip checking crates
-        
-        // Check collision with bombs
-        for (let b = bombs.length - 1; b >= 0; b--) {
-            const bomb = bombs[b];
-            const dx = proj.x - bomb.x;
-            const dy = proj.y - bomb.y;
-            if (Math.abs(dx) < proj.radius + bomb.width / 2 && Math.abs(dy) < proj.radius + bomb.height / 2) {
-                explosions.push(new Explosion(bomb.x, bomb.y));
-                playExplosionSound();
-                projectiles.splice(i, 1);
-                bombs.splice(b, 1);
-                
-                credits += 15; // Reward for shooting bombs out of the air!
-                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-                hit = true;
-                break;
-            }
-        }
-        
-        if (hit) continue; // Skip checking crates if a bomb was hit
 
         // Check collision with crates
         for (let k = crates.length - 1; k >= 0; k--) {
@@ -1016,21 +962,6 @@ function checkCollisions() {
                         if (homingBonus > 0) {
                             homingAmmo += (homingAmmo <= 15) ? (3 + ammoBonus * 1) : 1;
                         }
-                    }
-                }
-                
-                // Destroy planes in AOE
-                for (let p = planes.length - 1; p >= 0; p--) {
-                    const plane = planes[p];
-                    const pdx = plane.x - mine.x;
-                    const pdy = plane.y - mine.y;
-                    const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-                    if (pdist < blastRadius + plane.width / 2) {
-                        explosions.push(new Explosion(plane.x, plane.y));
-                        planes.splice(p, 1);
-                        score += 2;
-                        credits += 25;
-                        checkBossTriggers();
                     }
                 }
                 
@@ -1151,43 +1082,6 @@ function update() {
     mines.forEach(mine => mine.update());
     mines = mines.filter(mine => !mine.isOffScreen());
 
-    planes.forEach(plane => plane.update());
-    planes = planes.filter(plane => {
-        if (plane.isOffScreen()) {
-            credits = Math.max(0, credits - 10); // Lose 10 credits if a plane escapes!
-            scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-            return false;
-        }
-        return true;
-    });
-    
-    let activeBombs = [];
-    bombs.forEach(bomb => {
-        bomb.update();
-        if (!bomb.isOffScreen()) {
-            activeBombs.push(bomb);
-        } else {
-            if (isSubmerged) {
-                // Safely dodged! Muffled splash above
-                explosions.push(new Explosion(bomb.x, bomb.y, false));
-                playSplashSound();
-                shakeIntensity = 5; // Very small shake
-            } else {
-                // Bomb successfully hit the water!
-                explosions.push(new Explosion(bomb.x, bomb.y, false));
-                explosions.push(new Explosion(bomb.x + 20, bomb.y - 10, false));
-                playExplosionSound();
-                crackGlass(bomb.x, bomb.y); // Shatter the screen!
-                shakeIntensity = 25; // Massive screen shake
-                credits = Math.max(0, credits - 20); // Big penalty
-                playerHp -= 2;
-                if (playerHp <= 0) gameOver = true;
-                scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
-            }
-        }
-    });
-    bombs = activeBombs;
-
     explosions.forEach(exp => exp.update());
     explosions = explosions.filter(exp => !exp.isDead());
 
@@ -1203,28 +1097,28 @@ function update() {
     });
 
     // Weather logic
-    if (Math.random() < 0.001) { // 0.1% chance every frame to change weather
+    if (Math.random() < 0.00001) { // Roughly once per 30 minutes (at 60fps) to change weather
         targetStormIntensity = targetStormIntensity > 0 ? 0.0 : 1.0;
-        targetRainMultiplier = (targetStormIntensity > 0 && Math.random() < 0.3) ? 4.0 : 1.0; // 30% chance for an extreme downpour
+        targetRainMultiplier = (targetStormIntensity > 0 && Math.random() < 0.3) ? 2.0 : 1.0; // Reduced downpour intensity
     }
 
     // Random squalls during an active storm
     if (targetStormIntensity > 0 && Math.random() < 0.002) {
-        targetRainMultiplier = Math.random() < 0.4 ? 5.0 : 1.0; // Randomly pour extra hard
+        targetRainMultiplier = Math.random() < 0.4 ? 2.5 : 1.0; // Randomly pour extra hard, but reduced
     }
     
     if (stormIntensity < targetStormIntensity) {
-        stormIntensity += 0.002;
+        stormIntensity += 0.0005; // Slowed down transition
         if (stormIntensity > targetStormIntensity) stormIntensity = targetStormIntensity;
     } else if (stormIntensity > targetStormIntensity) {
-        stormIntensity -= 0.002;
+        stormIntensity -= 0.0005; // Slowed down transition
         if (stormIntensity < targetStormIntensity) stormIntensity = targetStormIntensity;
     }
 
     if (rainMultiplier < targetRainMultiplier) {
-        rainMultiplier += 0.02;
+        rainMultiplier += 0.005; // Slowed down transition
     } else if (rainMultiplier > targetRainMultiplier) {
-        rainMultiplier -= 0.02;
+        rainMultiplier -= 0.005; // Slowed down transition
     }
 
     if (stormIntensity > 0.5 && Math.random() < 0.005) {
@@ -1238,7 +1132,7 @@ function update() {
     }
 
     if (stormIntensity > 0) {
-        const exactRain = stormIntensity * 12 * rainMultiplier;
+        const exactRain = stormIntensity * 6 * rainMultiplier; // Reduced overall volume of raindrops
         const rainCount = Math.floor(exactRain); // Dynamic rain volume
         for (let i = 0; i < rainCount; i++) { raindrops.push(new Raindrop()); }
         if (Math.random() < exactRain % 1) { raindrops.push(new Raindrop()); }
@@ -1250,7 +1144,6 @@ function update() {
     spawnShip();
     spawnCrate();
     spawnMine();
-    spawnPlane();
     checkCollisions();
 
     if (spawnJuggernautPending) {
@@ -1435,12 +1328,6 @@ function draw() {
         ctx.lineTo(x, y);
     }
     ctx.stroke();
-
-    // Draw planes (Before clouds so they can fly behind/through them)
-    planes.forEach(plane => plane.draw());
-
-    // Draw falling bombs
-    bombs.forEach(bomb => bomb.draw());
 
     // Draw ships
     ships.forEach(ship => {
@@ -2122,8 +2009,6 @@ function draw() {
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'juggernaut'), '#ffffff', 'ship'); // Bright white blips for juggernauts
     visibleShipsCount += drawBlips(ships.filter(s => s.type === 'submarine'), '#00ff00', 'submarine'); // Bright green blips so they are easy to see on radar
     drawBlips(crates, '#ffff00', 'crate'); // Yellow blips for ammo crates
-    drawBlips(planes, '#00ffff', 'ship'); // Cyan blips for aircraft
-    drawBlips(bombs, '#ffa500', 'bomb'); // Orange blips for falling bombs
     drawBlips(mines, '#ff0000', 'mine'); // Bright red blips for mines
     ctx.restore();
 
@@ -2497,7 +2382,7 @@ function draw() {
             "Battleship: Slower, larger, takes 3 hits.",
             "PT Boat: Very fast, small, takes 1 hit.",
             "Submarine: Can dive to dodge shots, 1 HP.",
-            "Aircraft Carrier: Launches enemy planes, 5 HP.",
+            "Aircraft Carrier: Large enemy ship, 5 HP.",
             "Civilian: Hospital ship, DO NOT SHOOT! (-20 pts).",
             "Dreadnought: Mini-boss, 9 HP.",
             "Juggernaut: Massive Super Boss, 15 HP."
@@ -2849,7 +2734,7 @@ canvas.addEventListener('click', (e) => {
             playerHp = playerMaxHp;
             gameOver = false;
             ships = []; enemyProjectiles = []; projectiles = []; explosions = [];
-            crates = []; mines = []; planes = []; bombs = [];
+            crates = []; mines = [];
             score = 0; credits = 0;
             dreadnoughtActive = false; juggernautActive = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
@@ -3196,7 +3081,7 @@ canvas.addEventListener('click', (e) => {
         const resetBtnY = canvas.height / 2 + 210;
         if (cx >= nvBtnX && cx <= nvBtnX + nvBtnW && cy >= resetBtnY && cy <= resetBtnY + nvBtnH) {
             loadUserData();
-            ships = []; crates = []; mines = []; planes = []; bombs = []; projectiles = []; enemyProjectiles = [];
+            ships = []; crates = []; mines = []; projectiles = []; enemyProjectiles = [];
             gameOver = false;
             scoreElement.textContent = `Sunken Ships: ${score} | Best: ${highScore} | Credits: $${credits}`;
             isMenuOpen = false;
@@ -3289,7 +3174,6 @@ function gameLoop() {
             "• Destroy enemy ships to earn credits and points.",
             "• DO NOT shoot the white Civilian Hospital ships! (-20 Credits)",
             "• Shoot floating crates to restock special ammo.",
-            "• Shoot falling bombs before they hit the water!",
             "• Press 'U' or click UPGRADES to improve your submarine.",
             "• Press 'ESC' or 'P' to pause the game."
         ];

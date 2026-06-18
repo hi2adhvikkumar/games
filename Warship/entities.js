@@ -123,7 +123,6 @@ class Ship {
             this.height = 25;
             this.speed = Math.random() * 0.4 + 0.4;
             this.hp = 5; // Takes 5 hits
-            this.planeTimer = 0; // Timer for launching planes
         } else if (this.type === 'dreadnought') {
             this.x = canvas.width / 2 + 50; // Spawn directly inside the center of the periscope!
             this.y = horizonY + 30;
@@ -154,15 +153,6 @@ class Ship {
 
     update() {
         this.x -= this.speed;
-        if (this.type === 'aircraftcarrier') {
-            this.planeTimer++;
-            if (this.planeTimer > 180) { // Launch plane roughly every 3 seconds
-                this.planeTimer = 0;
-                if (planes.length < 6) { // Carriers can launch more planes into the sky
-                    planes.push(new Plane(this.x, this.y - this.height));
-                }
-            }
-        }
         
         // Enemy Firing Logic
         if (this.type !== 'civilian' && this.type !== 'submarine') {
@@ -170,14 +160,16 @@ class Ship {
             if (this.fireTimer <= 0) {
                 this.fireTimer = Math.random() * 150 + (this.type === 'juggernaut' ? 40 : (this.type === 'dreadnought' ? 60 : 100));
                 if (typeof enemyProjectiles !== 'undefined' && this.x > viewLeft && this.x < viewRight) {
-                    if (this.type === 'juggernaut') {
-                        enemyProjectiles.push(new EnemyProjectile(this.x - 250, this.y));
-                        enemyProjectiles.push(new EnemyProjectile(this.x + 250, this.y));
-                    } else if (this.type === 'dreadnought') {
-                        enemyProjectiles.push(new EnemyProjectile(this.x - 50, this.y));
-                        enemyProjectiles.push(new EnemyProjectile(this.x + 50, this.y));
-                    } else {
-                        enemyProjectiles.push(new EnemyProjectile(this.x, this.y));
+                    if (typeof playerRole === 'undefined' || playerRole !== 'SHIPS') {
+                        if (this.type === 'juggernaut') {
+                            enemyProjectiles.push(new EnemyProjectile(this.x - 250, this.y));
+                            enemyProjectiles.push(new EnemyProjectile(this.x + 250, this.y));
+                        } else if (this.type === 'dreadnought') {
+                            enemyProjectiles.push(new EnemyProjectile(this.x - 50, this.y));
+                            enemyProjectiles.push(new EnemyProjectile(this.x + 50, this.y));
+                        } else {
+                            enemyProjectiles.push(new EnemyProjectile(this.x, this.y));
+                        }
                     }
                 }
             }
@@ -484,221 +476,6 @@ class Raindrop {
     }
     isOffScreen() {
         return this.y > viewBottom + 50;
-    }
-}
-
-class Plane {
-    constructor(spawnX = null, spawnY = null) {
-        if (spawnX !== null && spawnY !== null) {
-            this.x = spawnX;
-            this.y = spawnY;
-            this.facingRight = false;
-            this.vx = -(Math.random() * 2.5 + 4); // Always fly left
-            this.vy = -3.5; // Climb steeply from the carrier deck
-        } else {
-            // Spawn high up in the sky, above the horizon
-            this.y = viewTop + Math.random() * (horizonY - viewTop - 80); 
-            this.vy = 0;
-            
-            // Always spawn on the right side
-            this.x = viewRight + 100;
-            this.vx = -(Math.random() * 2.5 + 4); // Fast moving to the left
-            this.facingRight = false;
-        }
-        this.width = 30;
-        this.height = 10;
-        this.hp = 1;
-        
-        // Randomize when the plane will drop its bomb during its pass
-        this.bombTimer = Math.floor(Math.random() * 60) + 30;
-        
-        if (typeof playPlaneWhooshSound === 'function') {
-            playPlaneWhooshSound();
-        }
-    }
-
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        if (this.vy < 0) this.vy += 0.03; // Slowly level out
-        if (this.vy > 0) this.vy = 0;
-        
-        this.bombTimer--;
-        if (this.bombTimer === 0 && typeof bombs !== 'undefined') {
-            bombs.push(new Bomb(this.x, this.y));
-        }
-    }
-
-    draw() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        if (!this.facingRight) ctx.scale(-1, 1);
-
-        // Tilt the plane slightly if it is climbing
-        const pitch = Math.atan2(this.vy, Math.abs(this.vx));
-        ctx.rotate(pitch);
-
-        // Jet Exhaust (Flickering Afterburner Flame)
-        ctx.fillStyle = `rgba(100, 200, 255, ${0.6 + Math.random() * 0.4})`;
-        ctx.beginPath();
-        ctx.moveTo(-18, -1);
-        ctx.lineTo(-26 - Math.random() * 8, 0);
-        ctx.lineTo(-18, 1);
-        ctx.fill();
-        
-        // Inner hotter flame
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 + Math.random() * 0.2})`;
-        ctx.beginPath();
-        ctx.moveTo(-18, -0.5);
-        ctx.lineTo(-22 - Math.random() * 3, 0);
-        ctx.lineTo(-18, 0.5);
-        ctx.fill();
-
-        // Far Tail Fin
-        ctx.fillStyle = '#33383d';
-        ctx.beginPath();
-        ctx.moveTo(-10, -2); ctx.lineTo(-16, -11); ctx.lineTo(-20, -11); ctx.lineTo(-16, -2);
-        ctx.fill();
-
-        // Far Wing (darker for 3D depth)
-        ctx.fillStyle = '#3a3f44';
-        ctx.beginPath();
-        ctx.moveTo(2, 0); ctx.lineTo(-6, -6); ctx.lineTo(-12, -6); ctx.lineTo(-4, 0);
-        ctx.fill();
-
-        // Sleek Stealth Fuselage
-        ctx.fillStyle = '#4a4f54';
-        ctx.beginPath();
-        ctx.moveTo(22, 0);   // Sharp nose tip
-        ctx.lineTo(12, -2);  // Upper nose
-        ctx.lineTo(6, -3);   // Base of canopy
-        ctx.lineTo(-8, -3);  // Spine
-        ctx.lineTo(-18, -2); // Top engine exhaust
-        ctx.lineTo(-18, 2);  // Bottom engine exhaust
-        ctx.lineTo(-12, 3);  // Lower tail
-        ctx.lineTo(0, 4);    // Belly
-        ctx.lineTo(8, 2);    // Intake bottom
-        ctx.lineTo(14, 1);   // Lower nose
-        ctx.closePath();
-        ctx.fill();
-        
-        // Angular Air Intake (Dark recess)
-        ctx.fillStyle = '#1a1c1e';
-        ctx.beginPath();
-        ctx.moveTo(6, 1); ctx.lineTo(10, 0); ctx.lineTo(8, 2); ctx.closePath();
-        ctx.fill();
-        
-        // Chiseled Stealth Edge (Body detail)
-        ctx.strokeStyle = '#3a3f44';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(6, 1); ctx.lineTo(-18, 0); ctx.stroke();
-        
-        // F-22 Gold-tinted Canopy (Reduces radar signature!)
-        ctx.fillStyle = '#cda434'; 
-        ctx.beginPath();
-        ctx.moveTo(10, -2); ctx.lineTo(4, -6); ctx.lineTo(-2, -5); ctx.lineTo(1, -2.5);
-        ctx.fill();
-
-        // Near Horizontal Stabilizer (Tail wing)
-        ctx.fillStyle = '#3a3f44';
-        ctx.beginPath();
-        ctx.moveTo(-10, 1); ctx.lineTo(-16, 4); ctx.lineTo(-22, 4); ctx.lineTo(-15, 1);
-        ctx.fill();
-
-        // Near Tail Fin
-        ctx.fillStyle = '#555b61';
-        ctx.beginPath();
-        ctx.moveTo(-8, -2); ctx.lineTo(-14, -12); ctx.lineTo(-18, -12); ctx.lineTo(-14, -2);
-        ctx.fill();
-
-        // Near Wing (brighter)
-        ctx.fillStyle = '#5a6066';
-        ctx.beginPath();
-        ctx.moveTo(2, 1); ctx.lineTo(-6, 9); ctx.lineTo(-14, 9); ctx.lineTo(-4, 1);
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    isOffScreen() {
-        return (this.facingRight && this.x > viewRight + 150) || (!this.facingRight && this.x < viewLeft - 150);
-    }
-}
-
-class Bomb {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.vy = 1; // Initial fall speed
-        this.width = 12;
-        this.height = 20;
-        this.targetY = horizonY + Math.random() * 200 + 50; // Explodes randomly in the water
-    }
-
-    update() {
-        this.y += this.vy;
-        this.vy += 0.15; // Gravity acceleration
-    }
-
-    draw() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        
-        // Speed line / motion blur trail
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, -this.height / 2 - 4);
-        ctx.lineTo(0, -this.height / 2 - 15 - Math.random() * 10);
-        ctx.stroke();
-
-        // Tail fins (back layer)
-        ctx.fillStyle = '#2a2d30';
-        ctx.beginPath();
-        ctx.moveTo(-this.width / 2 + 2, -this.height / 4);
-        ctx.lineTo(-this.width / 2 - 5, -this.height / 2 - 6);
-        ctx.lineTo(this.width / 2 + 5, -this.height / 2 - 6);
-        ctx.lineTo(this.width / 2 - 2, -this.height / 4);
-        ctx.fill();
-
-        // 3D Body Gradient
-        const grad = ctx.createLinearGradient(-this.width / 2, 0, this.width / 2, 0);
-        grad.addColorStop(0, '#2b3035');   // Left dark edge
-        grad.addColorStop(0.3, '#7a858e'); // Metallic highlight
-        grad.addColorStop(1, '#1a1d20');   // Right shadow
-
-        // Aerodynamic teardrop body
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.moveTo(0, this.height / 2 + 2); // Bottom tip
-        ctx.quadraticCurveTo(this.width / 2 + 2, 0, this.width / 2 - 2, -this.height / 2); // Right curve
-        ctx.lineTo(-this.width / 2 + 2, -this.height / 2); // Flat top
-        ctx.quadraticCurveTo(-this.width / 2 - 2, 0, 0, this.height / 2 + 2); // Left curve
-        ctx.fill();
-
-        // Classic Yellow Ordnance Stripe
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-this.width / 2 + 1.5, this.height / 4);
-        ctx.lineTo(this.width / 2 - 1.5, this.height / 4);
-        ctx.stroke();
-
-        // Glowing arming indicator tip
-        ctx.fillStyle = '#ff3300';
-        ctx.beginPath(); ctx.arc(0, this.height / 2 + 1, 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffaa00'; // Inner hot glow
-        ctx.beginPath(); ctx.arc(0, this.height / 2 + 1, 1, 0, Math.PI * 2); ctx.fill();
-
-        // Center Fin (Front layer for 3D perspective)
-        ctx.fillStyle = '#1a1d20';
-        ctx.fillRect(-1.5, -this.height / 2 - 6, 3, 10);
-
-        ctx.restore();
-    }
-
-    isOffScreen() {
-        return this.y >= this.targetY;
     }
 }
 
